@@ -1,26 +1,261 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+   Finding Keypers — Art Deco theme
+   Black · Bronze · Gold
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.25rem;
+
+  /* Core neutrals — deep lacquered black */
+  --background: oklch(0.13 0.012 60);
+  --foreground: oklch(0.92 0.04 85);
+
+  --card: oklch(0.16 0.015 60);
+  --card-foreground: oklch(0.92 0.04 85);
+
+  --popover: oklch(0.15 0.015 60);
+  --popover-foreground: oklch(0.92 0.04 85);
+
+  /* Gold primary */
+  --primary: oklch(0.82 0.13 86);
+  --primary-foreground: oklch(0.16 0.02 60);
+
+  /* Bronze secondary */
+  --secondary: oklch(0.55 0.08 64);
+  --secondary-foreground: oklch(0.96 0.03 90);
+
+  --muted: oklch(0.22 0.018 60);
+  --muted-foreground: oklch(0.72 0.05 82);
+
+  --accent: oklch(0.62 0.1 70);
+  --accent-foreground: oklch(0.14 0.02 60);
+
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.96 0.02 90);
+
+  --border: oklch(0.45 0.07 70 / 35%);
+  --input: oklch(0.4 0.06 70 / 40%);
+  --ring: oklch(0.82 0.13 86);
+
+  /* Brand tokens */
+  --gold: oklch(0.84 0.14 88);
+  --gold-bright: oklch(0.9 0.16 92);
+  --bronze: oklch(0.58 0.09 62);
+  --bronze-dark: oklch(0.42 0.07 58);
+  --noir: oklch(0.1 0.008 60);
 }
 
 @theme inline {
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-gold: var(--gold);
+  --color-gold-bright: var(--gold-bright);
+  --color-bronze: var(--bronze);
+  --color-bronze-dark: var(--bronze-dark);
+  --color-noir: var(--noir);
+
+  --font-display: var(--font-cinzel);
+  --font-sans: var(--font-jost);
+
+  --animate-marquee-up: marquee-up var(--marquee-duration, 40s) linear infinite;
+  --animate-marquee-down: marquee-down var(--marquee-duration, 50s) linear infinite;
+  --animate-shimmer: shimmer 3s ease-in-out infinite;
+  --animate-fade-up: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes marquee-up {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes marquee-down {
+  from {
+    transform: translateY(-50%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    background-position: 0% 50%;
+    opacity: 0.85;
+  }
+  50% {
+    background-position: 100% 50%;
+    opacity: 1;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    /* Subtle deco lattice + radial glow over the black */
+    background-image:
+      radial-gradient(
+        circle at 50% -10%,
+        oklch(0.3 0.06 70 / 0.4),
+        transparent 55%
+      ),
+      repeating-linear-gradient(
+        45deg,
+        oklch(0.18 0.02 60 / 0.5) 0px,
+        oklch(0.18 0.02 60 / 0.5) 1px,
+        transparent 1px,
+        transparent 22px
+      ),
+      repeating-linear-gradient(
+        -45deg,
+        oklch(0.18 0.02 60 / 0.5) 0px,
+        oklch(0.18 0.02 60 / 0.5) 1px,
+        transparent 1px,
+        transparent 22px
+      );
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  /* Gold gradient text */
+  .text-gilded {
+    background: linear-gradient(
+      100deg,
+      var(--bronze) 0%,
+      var(--gold) 35%,
+      var(--gold-bright) 50%,
+      var(--gold) 65%,
+      var(--bronze) 100%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .text-gilded-shimmer {
+    background: linear-gradient(
+      100deg,
+      var(--bronze-dark) 0%,
+      var(--gold) 30%,
+      var(--gold-bright) 50%,
+      var(--gold) 70%,
+      var(--bronze-dark) 100%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 5s linear infinite;
+  }
+
+  /* Brushed-metal gradient surfaces */
+  .bg-gilded {
+    background: linear-gradient(
+      135deg,
+      var(--bronze-dark) 0%,
+      var(--gold) 45%,
+      var(--gold-bright) 55%,
+      var(--bronze) 100%
+    );
+  }
+
+  .border-gilded {
+    border-color: var(--gold);
+  }
+
+  /* Thin double rule used as deco divider */
+  .deco-rule {
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--bronze) 15%,
+      var(--gold) 50%,
+      var(--bronze) 85%,
+      transparent
+    );
+  }
+
+  .shadow-gold {
+    box-shadow:
+      0 0 0 1px oklch(0.6 0.09 70 / 0.4),
+      0 10px 40px -12px oklch(0.7 0.12 80 / 0.45);
+  }
+
+  /* Fade mask at top & bottom of marquee columns */
+  .mask-fade-y {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      black 12%,
+      black 88%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      black 12%,
+      black 88%,
+      transparent 100%
+    );
+  }
+
+  .pause-on-hover:hover * {
+    animation-play-state: paused;
+  }
 }
