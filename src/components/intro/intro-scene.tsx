@@ -1,0 +1,371 @@
+'use client'
+
+import { Environment, Html, Lightformer, OrbitControls, PerspectiveCamera } from '@react-three/drei'
+import { Canvas } from '@react-three/fiber'
+import { Bloom, EffectComposer } from '@react-three/postprocessing'
+import { Suspense, useEffect, useId, useRef, useState } from 'react'
+import { FadingSparkles } from '../view/fading-sparkles'
+import { GlowFloor } from '../view/glow-floor'
+
+/* --------------------------- Narration script ---------------------------- *
+ * Each block is rendered centred, fades in over `fadeIn`, holds for `hold`,
+ * then fades out over `fadeOut` (all in ms). Timings are tuned so each block
+ * lingers long enough to read comfortably.
+ * -------------------------------------------------------------------------- */
+type Block = {
+  lines: string[]
+  hold: number
+  fadeIn?: number
+  fadeOut?: number
+  delay?: number // beat of black before this block fades in (ms)
+}
+
+const DEFAULT_FADE_IN = 1200
+const DEFAULT_FADE_OUT = 1800
+
+const BLOCKS: Block[] = [
+  { lines: ['Welcome, explorers.'], hold: 5000, delay: 4500 },
+  {
+    lines: [
+      'Among thousands of paths,',
+      'yours crossed here.',
+      '',
+      'Through curiosity',
+      '',
+      'through Anjuna',
+      '',
+      'and through unlocking this hidden box.',
+    ],
+    hold: 8000,
+  },
+  {
+    lines: ['But not all treasures are meant', 'to stay hidden forever.'],
+    hold: 4000,
+  },
+  {
+    lines: ["They're meant to be shared."],
+    hold: 3400,
+    fadeOut: 4000,
+  },
+  {
+    lines: [
+      'Find the others.',
+      '',
+      'Awaken their wonder.',
+      '',
+      'Leave this world a little',
+      'more connected than you found it.',
+    ],
+    hold: 9000,
+  },
+  {
+    lines: ['Explore the sonderic entropy'],
+    hold: 6000,
+    fadeOut: 2500,
+  },
+  {
+    // "(long fade out)" — give this block an extended exit.
+    lines: ["Now it's up to you", '', 'to continue the story…'],
+    hold: 5000,
+    fadeOut: 3800,
+  },
+  { lines: ['But first…'], hold: 3000 },
+  {
+    lines: [
+      'Stand together.',
+      'Capture this moment.',
+      'So one day when this becomes a memory,',
+      'you\'ll remember when',
+      'two worlds briefly became one…',
+    ],
+    hold: 9000,
+    fadeOut: 3000,
+  },
+]
+
+const REVEAL_DURATION = 1900 // initial fade in from black
+const BLACKOUT_DURATION = 2400 // final fade to black before redirect
+
+// Peak displacement (in px) the noise pushes glyph pixels when fully dissolved.
+// Large enough to shatter the letters into drifting specks rather than smear them.
+const MAX_DISPERSE = 64
+
+const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2)
+
+function Narration({ onComplete }: { onComplete: () => void }) {
+  // step: -1 = initial blackout, 0..N-1 = blocks, N = final blackout
+  const [step, setStep] = useState(-1)
+  const [shown, setShown] = useState(false)
+  const [cover, setCover] = useState(1) // black cover opacity
+
+  // The cover reveals slowly at the start and blacks out a touch slower at the end.
+  const coverDuration = step >= BLOCKS.length ? BLACKOUT_DURATION : REVEAL_DURATION
+
+  // Kick off: fade in from black, then begin the first block.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setCover(0)
+      setStep(0)
+    }, 80)
+    return () => clearTimeout(t)
+  }, [])
+
+  // Drive each block's in / hold / out cycle.
+  useEffect(() => {
+    if (step < 0) return
+
+    if (step >= BLOCKS.length) {
+      const raf = requestAnimationFrame(() => setCover(1))
+      const done = setTimeout(onComplete, BLACKOUT_DURATION + 200)
+      return () => {
+        cancelAnimationFrame(raf)
+        clearTimeout(done)
+      }
+    }
+
+    const block = BLOCKS[step]
+    const fadeIn = block.fadeIn ?? DEFAULT_FADE_IN
+    const fadeOut = block.fadeOut ?? DEFAULT_FADE_OUT
+    const delay = block.delay ?? 0
+
+    const showAt = setTimeout(() => setShown(true), delay)
+    const hideAt = setTimeout(() => setShown(false), delay + fadeIn + block.hold)
+    const nextAt = setTimeout(() => setStep((s) => s + 1), delay + fadeIn + block.hold + fadeOut)
+
+    return () => {
+      clearTimeout(showAt)
+      clearTimeout(hideAt)
+      clearTimeout(nextAt)
+    }
+  }, [step, onComplete])
+
+  const block = step >= 0 && step < BLOCKS.length ? BLOCKS[step] : null
+  const fadeIn = block?.fadeIn ?? DEFAULT_FADE_IN
+  const fadeOut = block?.fadeOut ?? DEFAULT_FADE_OUT
+  // Drive the dissolve + fade with the active direction's timing.
+  const dur = shown ? fadeIn : fadeOut
+
+  // Noise dissolve: `disperse` runs 0 (assembled / crisp) ↔ 1 (scattered into
+  // specks), driving the SVG displacement filter below. We animate it per-frame
+  // — CSS can't transition filter-primitive attributes — easing toward 0 as the
+  // block appears and 1 as it leaves, in lockstep with the opacity fade.
+  const filterId = useId().replace(/:/g, '')
+  const [disperse, setDisperse] = useState(1)
+  const disperseRef = useRef(1)
+  useEffect(() => {
+    const from = disperseRef.current
+    const target = shown ? 0 : 1
+    if (from === target) return
+    const start = performance.now()
+    let raf = 0
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / dur)
+      const value = from + (target - from) * easeInOut(t)
+      disperseRef.current = value
+      setDisperse(value)
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [shown, dur])
+
+  const dispScale = disperse * MAX_DISPERSE
+
+  return (
+    <div
+      className='pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden select-none'
+      style={{
+        // Cinzel via the app's --font-cinzel token, with system fallbacks.
+        fontFamily: 'var(--font-cinzel), Georgia, serif',
+      }}
+    >
+      {/* SVG noise-dissolve filter: fractal turbulence displaces the glyph
+          pixels, and a threshold on its alpha eats holes that grow with
+          `dispScale`, so the text crumbles into drifting specks. The trailing
+          blur softens the speck edges. */}
+      <svg aria-hidden width='0' height='0' style={{ position: 'absolute', pointerEvents: 'none' }}>
+        <filter
+          id={filterId}
+          x='-50%'
+          y='-50%'
+          width='200%'
+          height='200%'
+          colorInterpolationFilters='sRGB'
+        >
+          <feTurbulence
+            type='fractalNoise'
+            baseFrequency='0.62'
+            numOctaves={2}
+            seed={4}
+            stitchTiles='stitch'
+            result='noise'
+          />
+          {/* Erode the glyph alpha by the noise — holes open up as it dissolves. */}
+          <feDisplacementMap
+            in='SourceGraphic'
+            in2='noise'
+            scale={dispScale}
+            xChannelSelector='R'
+            yChannelSelector='G'
+          />
+        </filter>
+      </svg>
+
+      {/* Centred narration text */}
+      <div
+        className='mx-auto max-w-3xl px-8 text-center'
+        style={{
+          opacity: block ? (shown ? 1 : 0) : 0,
+          // Particle dissolve: glyph pixels scatter via the SVG noise filter
+          // (driven by `dispScale`) while a gentle lift + residual blur keep the
+          // edges soft — layered on top of the opacity fade for a "disintegrate
+          // into dust" feel.
+          transform: `translateY(${shown ? 0 : 14}px)`,
+          filter: `url(#${filterId}) blur(${disperse * 1.5}px)`,
+          transition: `opacity ${dur}ms ease-in-out, transform ${dur}ms ease-in-out`,
+          willChange: 'opacity, transform, filter',
+        }}
+      >
+        {/* Top deco rule */}
+        <div
+          className='mx-auto mb-7 h-px w-24'
+          style={{
+            background:
+              'linear-gradient(to right, transparent, #c98f37 40%, #f4d488 50%, #c98f37 60%, transparent)',
+          }}
+        />
+
+        {block?.lines.map((line, i) =>
+          // An empty string is an intentional blank line — render a spacer
+          // (an empty <p> generates no line box and collapses to zero height).
+          line === '' ? (
+            <div key={i} aria-hidden style={{ height: '0.9em' }} />
+          ) : (
+            <p
+              key={i}
+              className='font-display text-[1rem] leading-relaxed font-medium tracking-[0.18em] uppercase sm:text-[1.2rem] md:text-[1.5rem] md:leading-normal'
+              style={{
+                backgroundImage:
+                  'linear-gradient(100deg, #b07d2e 0%, #e8c06a 35%, #fbe6a8 50%, #e8c06a 65%, #b07d2e 100%)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                color: 'transparent',
+                WebkitTextFillColor: 'transparent',
+                textShadow: '0 0 30px rgba(237, 179, 69, 0.18)',
+                marginTop: i === 0 ? 0 : '0.35em',
+              }}
+            >
+              {line}
+            </p>
+          )
+        )}
+
+        {/* Bottom deco rule */}
+        <div
+          className='mx-auto mt-7 h-px w-24'
+          style={{
+            background:
+              'linear-gradient(to right, transparent, #c98f37 40%, #f4d488 50%, #c98f37 60%, transparent)',
+          }}
+        />
+      </div>
+
+      {/* Full-screen black cover — handles the opening fade-in and closing fade-out */}
+      <div
+        className='absolute inset-0 bg-black'
+        style={{
+          opacity: cover,
+          transition: `opacity ${coverDuration}ms ease-in-out`,
+          willChange: 'opacity',
+        }}
+      />
+    </div>
+  )
+}
+
+function SceneContents({ onComplete }: { onComplete: () => void }) {
+  return (
+    <>
+      <PerspectiveCamera makeDefault position={[0, 3, 8]} fov={45} />
+      {/* Slow ambient drift; user input disabled so the sequence stays cinematic */}
+      <OrbitControls
+        makeDefault
+        target={[0, 1.6, 0]}
+        enablePan={false}
+        enableZoom={false}
+        enableRotate={false}
+        autoRotate
+        autoRotateSpeed={0.12}
+      />
+
+      <color attach='background' args={['#000000']} />
+      <fog attach='fog' args={['#000000', 5, 190]} />
+
+      {/* Lighting (floor + particles are self-lit; kept for parity with /view) */}
+      <ambientLight intensity={0.35} color={'#ffdca0'} />
+      <pointLight position={[2.5, 4, 4]} intensity={32} color={'#ffcf8f'} distance={22} decay={2} />
+      <pointLight
+        position={[-3, 2, 2.5]}
+        intensity={14}
+        color={'#ffe6bf'}
+        distance={16}
+        decay={2}
+      />
+      <Environment resolution={64} frames={1}>
+        <Lightformer intensity={2} color={'#ffe6bf'} position={[0, 4, 4]} scale={[6, 6, 1]} />
+        <Lightformer intensity={1.2} color={'#ffd79a'} position={[-4, 2, 2]} scale={[3, 5, 1]} />
+        <Lightformer intensity={1.2} color={'#ffd79a'} position={[4, 2, 2]} scale={[3, 5, 1]} />
+      </Environment>
+
+      <Suspense fallback={null}>
+        <GlowFloor />
+      </Suspense>
+
+      {/* Light particles drifting through the hall */}
+      <FadingSparkles
+        count={150}
+        scale={[14, 9, 14]}
+        position={[0, 3, 0]}
+        size={1.6}
+        speed={0.25}
+        opacity={0.5}
+        color={'#ffd79a'}
+        noise={1.3}
+      />
+
+      {/* Narration text lives in the DOM, overlaid on the 3D scene via drei <Html>.
+          `calculatePosition` is pinned to the screen centre so the fullscreen overlay
+          fills the viewport exactly — independent of the camera / auto-rotation, which
+          would otherwise offset a fullscreen <Html> anchored to a world point. */}
+      <Html
+        fullscreen
+        zIndexRange={[20, 10]}
+        calculatePosition={(_el, _camera, size) => [size.width / 2, size.height / 2]}
+      >
+        <Narration onComplete={onComplete} />
+      </Html>
+
+      <EffectComposer>
+        <Bloom
+          intensity={0.7}
+          luminanceThreshold={0.55}
+          luminanceSmoothing={0.3}
+          mipmapBlur
+          radius={0.1}
+        />
+      </EffectComposer>
+    </>
+  )
+}
+
+export function IntroScene({ onComplete }: { onComplete: () => void }) {
+  return (
+    <Canvas
+      dpr={[1, 1.5]}
+      gl={{ antialias: true, toneMappingExposure: 1.1 }}
+      className='h-full w-full'
+    >
+      <SceneContents onComplete={onComplete} />
+    </Canvas>
+  )
+}

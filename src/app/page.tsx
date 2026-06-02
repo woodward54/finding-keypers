@@ -1,6 +1,6 @@
-import { SiteHeader } from "@/components/site-header";
-import { Gallery } from "@/components/gallery";
-import { BoxMotif, KeyMotif, LockMotif } from "@/components/deco-art";
+import { BoxMotif, KeyMotif, LockMotif } from '@/components/deco-art'
+import { Gallery } from '@/components/gallery'
+import { SiteHeader } from '@/components/site-header'
 
 export default function Home() {
   return (
@@ -29,13 +29,13 @@ export default function Home() {
             <BoxMotif className='h-7 w-7 opacity-80' />
           </div>
 
-          <h1 className='animate-fade-up font-display text-4xl leading-tight font-black tracking-[0.12em] uppercase sm:text-6xl'>
+          {/* <h1 className='animate-fade-up font-display text-4xl leading-tight font-black tracking-[0.12em] uppercase sm:text-6xl'>
             <span className='text-gilded-shimmer'>Finding Keypers</span>
-          </h1>
+          </h1> */}
 
-          <p className='animate-fade-up text-muted-foreground mx-auto mt-4 max-w-xl text-sm leading-relaxed text-balance sm:text-base'>
-            Every keyper holds a secret. Add your portrait to the gilded vault and take your place
-            among the locked, the bronze, and the bold.
+          <p className='fade-in animate-in text-muted-foreground mx-auto mt-4 max-w-xl text-sm leading-relaxed text-balance duration-[2000ms] sm:text-base'>
+            Every keyper holds a secret. Add your memory to the vault and take your place
+            among the explorers...
           </p>
 
           <div className='deco-rule mx-auto mt-7 h-[3px] w-48 sm:w-72' />

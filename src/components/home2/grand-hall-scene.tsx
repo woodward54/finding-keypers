@@ -8,11 +8,11 @@ import {
   Lightformer,
   MeshReflectorMaterial,
   PerspectiveCamera,
-  Sparkles,
   useTexture,
 } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
+import { FadingSparkles } from "../view/fading-sparkles";
 import { makeEmblemTexture, makeWallTexture, makeWindowTexture } from "./textures";
 
 const GOLD = "#d9a94e";
@@ -365,7 +365,7 @@ function SceneContents() {
       <Beam />
 
       {/* Subtle ambient dust drifting through the hall */}
-      <Sparkles
+      <FadingSparkles
         count={70}
         scale={[16, 11, 11]}
         position={[0, 5, -1]}

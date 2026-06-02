@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { env } from '@/env'
 import { useMutation } from 'convex/react'
-import { ArrowLeft, Camera, Check, Loader2, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Camera, Loader2, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -11,7 +11,7 @@ import { api } from '../../../convex/_generated/api'
 
 const convexEnabled = Boolean(env.NEXT_PUBLIC_CONVEX_URL)
 
-type Stage = 'starting' | 'live' | 'captured' | 'uploading' | 'done' | 'error'
+type Stage = 'starting' | 'live' | 'uploading' | 'error'
 
 export default function UploadPage() {
   const router = useRouter()
@@ -22,22 +22,54 @@ export default function UploadPage() {
   const [stage, setStage] = useState<Stage>('starting')
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
-  const [blob, setBlob] = useState<Blob | null>(null)
   const [name, setName] = useState('')
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const generateUploadUrl = convexEnabled ? useMutation(api.photos.generateUploadUrl) : null
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const savePhoto = convexEnabled ? useMutation(api.photos.savePhoto) : null
+  const generateUploadUrl = useMutation(api.photos.generateUploadUrl)
+  const savePhoto = useMutation(api.photos.savePhoto)
 
   const stopStream = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop())
+    const tracks = streamRef.current?.getTracks() ?? []
+    for (const track of tracks) {
+      track.stop()
+    }
     streamRef.current = null
   }, [])
 
+  const uploadPhoto = useCallback(
+    async (photoBlob: Blob) => {
+      if (!convexEnabled) {
+        setError(
+          "The vault isn't connected yet. Run `npx convex dev` to enable uploads, your portrait looks splendid, though."
+        )
+        setStage('error')
+        return
+      }
+
+      setStage('uploading')
+      try {
+        const postUrl = await generateUploadUrl()
+        const res = await fetch(postUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': photoBlob.type },
+          body: photoBlob,
+        })
+
+        if (!res.ok) {
+          throw new Error('Upload failed')
+        }
+
+        const { storageId } = await res.json()
+        const newId = await savePhoto({ storageId, name: name.trim() || undefined })
+        router.push(`/view/${encodeURIComponent(newId)}`)
+      } catch {
+        setError('Something went wrong while sealing your portrait. Try again.')
+        setStage('error')
+      }
+    },
+    [generateUploadUrl, name, router, savePhoto]
+  )
+
   const startCamera = useCallback(async () => {
-    setError(null)
-    setStage('starting')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1440 } },
@@ -58,9 +90,48 @@ export default function UploadPage() {
   }, [])
 
   useEffect(() => {
-    startCamera()
-    return () => stopStream()
-  }, [startCamera, stopStream])
+    let cancelled = false
+
+    const openCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1440 } },
+          audio: false,
+        })
+        if (cancelled) {
+          const tracks = stream.getTracks()
+          for (const track of tracks) {
+            track.stop()
+          }
+          return
+        }
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play()
+        }
+        setStage('live')
+      } catch {
+        if (cancelled) return
+        setError(
+          "We couldn't open your camera. Please grant permission, or use a device with a camera."
+        )
+        setStage('error')
+      }
+    }
+
+    void openCamera()
+
+    return () => {
+      cancelled = true
+      stopStream()
+    }
+  }, [stopStream])
+
+  useEffect(() => {
+    if (!preview) return
+    return () => URL.revokeObjectURL(preview)
+  }, [preview])
 
   const capture = useCallback(() => {
     const video = videoRef.current
@@ -83,49 +154,22 @@ export default function UploadPage() {
     canvas.toBlob(
       (b) => {
         if (!b) return
-        setBlob(b)
         setPreview(URL.createObjectURL(b))
-        setStage('captured')
         stopStream()
+        void uploadPhoto(b)
       },
       'image/jpeg',
       0.92
     )
-  }, [stopStream])
+  }, [stopStream, uploadPhoto])
 
   const retake = useCallback(() => {
     if (preview) URL.revokeObjectURL(preview)
     setPreview(null)
-    setBlob(null)
+    setError(null)
+    setStage('starting')
     startCamera()
   }, [preview, startCamera])
-
-  const submit = useCallback(async () => {
-    if (!blob) return
-    if (!convexEnabled || !generateUploadUrl || !savePhoto) {
-      setError(
-        "The vault isn't connected yet. Run `npx convex dev` to enable uploads — your portrait looks splendid, though."
-      )
-      setStage('error')
-      return
-    }
-    setStage('uploading')
-    try {
-      const postUrl = await generateUploadUrl()
-      const res = await fetch(postUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': blob.type },
-        body: blob,
-      })
-      const { storageId } = await res.json()
-      await savePhoto({ storageId, name: name.trim() || undefined })
-      setStage('done')
-      setTimeout(() => router.push('/'), 1100)
-    } catch {
-      setError('Something went wrong while sealing your portrait. Try again.')
-      setStage('error')
-    }
-  }, [blob, generateUploadUrl, savePhoto, name, router])
 
   return (
     <div className='relative flex min-h-screen flex-col'>
@@ -150,21 +194,12 @@ export default function UploadPage() {
       </header>
 
       <main className='mx-auto flex w-full max-w-md flex-1 flex-col items-center p-5'>
-        {/* <h1 className="mt-3 font-display text-2xl font-bold uppercase tracking-[0.18em] text-gilded sm:text-3xl">
-          Capture The Memory
-        </h1>
-        <p className="mt-2 text-center text-sm text-muted-foreground">
-          Look into the lens. When you&apos;re ready, capture your likeness for
-          the gilded gallery.
-        </p> */}
-
-        {/* <div className="mx-auto my-6 h-[2px] w-40 deco-rule" /> */}
-
         {/* Viewfinder */}
-        <div className='border-bronze/50 bg-noir shadow-gold relative aspect-[3/4] w-full overflow-hidden rounded-md border-2'>
+        <div className='border-bronze/50 bg-noir shadow-gold relative aspect-3/4 w-full overflow-hidden rounded-md border-2'>
           {/* Live video */}
           <video
             ref={videoRef}
+            aria-label='Camera preview'
             playsInline
             muted
             className={`h-full w-full -scale-x-100 object-cover ${
@@ -172,7 +207,7 @@ export default function UploadPage() {
             }`}
           />
           {/* Captured preview */}
-          {preview && (stage === 'captured' || stage === 'uploading' || stage === 'done') && (
+          {preview && stage === 'uploading' && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={preview}
@@ -193,15 +228,6 @@ export default function UploadPage() {
             </div>
           )}
 
-          {stage === 'done' && (
-            <div className='absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70'>
-              <Check className='text-gold size-12' />
-              <p className='font-display text-gold text-sm tracking-[0.25em] uppercase'>
-                Sealed in the vault
-              </p>
-            </div>
-          )}
-
           {/* Corner deco frame */}
           <div className='border-gold/30 pointer-events-none absolute inset-2 border' />
           <div className='border-gold pointer-events-none absolute top-0 left-0 size-6 border-t-2 border-l-2' />
@@ -215,6 +241,7 @@ export default function UploadPage() {
         {/* Name field */}
         <input
           type='text'
+          aria-label='Your name'
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={40}
@@ -229,19 +256,6 @@ export default function UploadPage() {
               <Camera className='size-5' />
               Capture
             </Button>
-          )}
-
-          {stage === 'captured' && (
-            <>
-              <Button variant='outline' size='lg' onClick={retake}>
-                <RotateCcw className='size-4' />
-                Retake
-              </Button>
-              <Button size='lg' className='flex-1' onClick={submit}>
-                <Check className='size-5' />
-                Add to Vault
-              </Button>
-            </>
           )}
 
           {stage === 'uploading' && (
@@ -261,7 +275,7 @@ export default function UploadPage() {
 
         {!convexEnabled && (
           <p className='text-muted-foreground/70 mt-5 text-center text-xs leading-relaxed'>
-            Preview mode — run <code className='text-bronze'>npx convex dev</code> to connect the
+            Preview mode: run <code className='text-bronze'>npx convex dev</code> to connect the
             vault and persist uploads.
           </p>
         )}
