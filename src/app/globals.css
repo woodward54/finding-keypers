@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -159,11 +159,7 @@
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
     /* Subtle deco lattice + radial glow over the black */
     background-image:
-      radial-gradient(
-        circle at 50% -10%,
-        oklch(0.3 0.06 70 / 0.4),
-        transparent 55%
-      ),
+      radial-gradient(circle at 50% -10%, oklch(0.3 0.06 70 / 0.4), transparent 55%),
       repeating-linear-gradient(
         45deg,
         oklch(0.18 0.02 60 / 0.5) 0px,
@@ -259,13 +255,7 @@
       black 88%,
       transparent 100%
     );
-    mask-image: linear-gradient(
-      to bottom,
-      transparent 0%,
-      black 12%,
-      black 88%,
-      transparent 100%
-    );
+    mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
   }
 
   .pause-on-hover:hover * {

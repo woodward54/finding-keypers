@@ -1,5 +1,6 @@
 import { BoxMotif, KeyMotif, LockMotif } from '@/components/deco-art'
 import { Gallery } from '@/components/gallery'
+import { MyMomentsButton } from '@/components/my-moments-button'
 import { SiteHeader } from '@/components/site-header'
 
 export default function Home() {
@@ -20,8 +21,8 @@ export default function Home() {
 
       <main className='relative flex-1'>
         {/* Hero */}
-        <section className='relative z-10 mx-auto max-w-5xl p-6 text-center sm:pt-14'>
-          <div className='text-bronze mb-5 flex items-center justify-center gap-6'>
+        <section className='relative z-10 mx-auto max-w-5xl p-6 text-center'>
+          <div className='text-bronze mb-4 flex items-center justify-center gap-6'>
             <KeyMotif className='h-7 w-7 opacity-80' />
             <span className='to-bronze h-px w-12 bg-gradient-to-r from-transparent sm:w-20' />
             <LockMotif className='h-9 w-9' />
@@ -33,10 +34,14 @@ export default function Home() {
             <span className='text-gilded-shimmer'>Finding Keypers</span>
           </h1> */}
 
-          <p className='fade-in animate-in text-muted-foreground mx-auto mt-4 max-w-xl text-sm leading-relaxed text-balance duration-[2000ms] sm:text-base'>
-            Every keyper holds a secret. Add your memory to the vault and take your place
-            among the explorers...
+          <p className='fade-in animate-in text-muted-foreground mx-auto mt-2 max-w-xl text-sm leading-relaxed text-balance duration-[2000ms] sm:text-base'>
+            Every keyper holds a secret. Add your memory to the vault and take your place among the
+            explorers...
           </p>
+
+          <div className='mt-4 flex justify-center'>
+            <MyMomentsButton />
+          </div>
 
           <div className='deco-rule mx-auto mt-7 h-[3px] w-48 sm:w-72' />
         </section>

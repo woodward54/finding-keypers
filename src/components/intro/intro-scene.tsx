@@ -3,7 +3,7 @@
 import { Environment, Html, Lightformer, OrbitControls, PerspectiveCamera } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
-import { Suspense, useEffect, useId, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { FadingSparkles } from '../view/fading-sparkles'
 import { GlowFloor } from '../view/glow-floor'
 
@@ -13,7 +13,10 @@ import { GlowFloor } from '../view/glow-floor'
  * lingers long enough to read comfortably.
  * -------------------------------------------------------------------------- */
 type Block = {
-  lines: string[]
+  lines?: string[]
+  image?: {
+    src: string
+  }
   hold: number
   fadeIn?: number
   fadeOut?: number
@@ -24,14 +27,14 @@ const DEFAULT_FADE_IN = 1200
 const DEFAULT_FADE_OUT = 1800
 
 const BLOCKS: Block[] = [
-  { lines: ['Welcome, explorers.'], hold: 4250, delay: 4500 },
+  { lines: ['Welcome, explorers.'], hold: 4000, delay: 4500 },
   {
     lines: [
       'Among thousands of paths,',
       'yours crossed here.',
       '',
       'Through curiosity, Anjuna',
-      'and through unlocking this hidden box.',
+      'and unlocking this hidden box.',
     ],
     hold: 6800,
   },
@@ -55,7 +58,7 @@ const BLOCKS: Block[] = [
     ],
     hold: 7650,
   },
-  { lines: ['But first…'], hold: 2550 },
+  { lines: ['But first…'], hold: 2000 },
   {
     lines: [
       'Capture the moment.',
@@ -63,13 +66,18 @@ const BLOCKS: Block[] = [
       "you'll remember when",
       'two worlds briefly became one…',
     ],
-    hold: 7650,
-    fadeOut: 3000,
+    hold: 6000,
+  },
+  {
+    image: { src: '/assets/finding-keypers-icon.png' },
+    hold: 2000,
+    fadeOut: 5200,
   },
 ]
 
 const REVEAL_DURATION = 1900 // initial fade in from black
 const BLACKOUT_DURATION = 2400 // final fade to black before redirect
+const MANUAL_FADE = 700 // snappier cross-fade used when navigating via keyboard
 
 // Peak displacement (in px) the noise pushes glyph pixels when fully dissolved.
 // Large enough to shatter the letters into drifting specks rather than smear them.
@@ -82,6 +90,14 @@ function Narration({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(-1)
   const [shown, setShown] = useState(false)
   const [cover, setCover] = useState(1) // black cover opacity
+  // When set, overrides the active block's fade timing (used by keyboard nav).
+  const [overrideDur, setOverrideDur] = useState<number | null>(null)
+  const navRef = useRef(false) // next block change came from manual navigation
+  const stepRef = useRef(step) // latest step, readable from stable callbacks
+  const navTimers = useRef<number[]>([]) // pending manual-nav timeouts
+  useEffect(() => {
+    stepRef.current = step
+  }, [step])
 
   // The cover reveals slowly at the start and blacks out a touch slower at the end.
   const coverDuration = step >= BLOCKS.length ? BLACKOUT_DURATION : REVEAL_DURATION
@@ -111,7 +127,9 @@ function Narration({ onComplete }: { onComplete: () => void }) {
     const block = BLOCKS[step]
     const fadeIn = block.fadeIn ?? DEFAULT_FADE_IN
     const fadeOut = block.fadeOut ?? DEFAULT_FADE_OUT
-    const delay = block.delay ?? 0
+    // Manual navigation cuts straight in, skipping the scripted opening beat.
+    const delay = navRef.current ? 0 : (block.delay ?? 0)
+    navRef.current = false
 
     const showAt = setTimeout(() => setShown(true), delay)
     const hideAt = setTimeout(() => setShown(false), delay + fadeIn + block.hold)
@@ -128,7 +146,8 @@ function Narration({ onComplete }: { onComplete: () => void }) {
   const fadeIn = block?.fadeIn ?? DEFAULT_FADE_IN
   const fadeOut = block?.fadeOut ?? DEFAULT_FADE_OUT
   // Drive the dissolve + fade with the active direction's timing.
-  const dur = shown ? fadeIn : fadeOut
+  // Keyboard navigation overrides this with a snappier cross-fade.
+  const dur = overrideDur ?? (shown ? fadeIn : fadeOut)
 
   // Noise dissolve: `disperse` runs 0 (assembled / crisp) ↔ 1 (scattered into
   // specks), driving the SVG displacement filter below. We animate it per-frame
@@ -155,6 +174,54 @@ function Narration({ onComplete }: { onComplete: () => void }) {
   }, [shown, dur])
 
   const dispScale = disperse * MAX_DISPERSE
+
+  const hasLines = Boolean(block?.lines?.length)
+
+  // Keyboard navigation: jump to the prev/next block with a quick cross-fade.
+  const navigate = useCallback((dir: number) => {
+    const s = stepRef.current
+    if (s < 0 || s >= BLOCKS.length) return
+    const target = s + dir
+    if (target < 0 || target >= BLOCKS.length) return
+
+    for (const timer of navTimers.current) {
+      clearTimeout(timer)
+    }
+    navTimers.current = []
+    setOverrideDur(MANUAL_FADE)
+    setShown(false) // fade the current block out…
+    navTimers.current.push(
+      window.setTimeout(() => {
+        navRef.current = true
+        setStep(target) // …then swap in the target and let it fade back up
+        navTimers.current.push(window.setTimeout(() => setOverrideDur(null), MANUAL_FADE + 60))
+      }, MANUAL_FADE)
+    )
+  }, [])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        navigate(1)
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        navigate(-1)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [navigate])
+
+  // Clear any pending nav timers on unmount.
+  useEffect(
+    () => () => {
+      for (const timer of navTimers.current) {
+        clearTimeout(timer)
+      }
+    },
+    []
+  )
 
   return (
     <div
@@ -196,63 +263,83 @@ function Narration({ onComplete }: { onComplete: () => void }) {
         </filter>
       </svg>
 
-      {/* Centred narration text */}
-      <div
-        className='mx-auto max-w-3xl px-8 text-center'
-        style={{
-          opacity: block ? (shown ? 1 : 0) : 0,
-          // Particle dissolve: glyph pixels scatter via the SVG noise filter
-          // (driven by `dispScale`) while a gentle lift + residual blur keep the
-          // edges soft — layered on top of the opacity fade for a "disintegrate
-          // into dust" feel.
-          transform: `translateY(${shown ? 0 : 14}px)`,
-          filter: `url(#${filterId}) blur(${disperse * 1.5}px)`,
-          transition: `opacity ${dur}ms ease-in-out, transform ${dur}ms ease-in-out`,
-          willChange: 'opacity, transform, filter',
-        }}
-      >
-        {/* Top deco rule */}
-        <div
-          className='mx-auto mb-7 h-px w-24'
-          style={{
-            background:
-              'linear-gradient(to right, transparent, #c98f37 40%, #f4d488 50%, #c98f37 60%, transparent)',
-          }}
-        />
-
-        {block?.lines.map((line, i) =>
-          // An empty string is an intentional blank line — render a spacer
-          // (an empty <p> generates no line box and collapses to zero height).
-          line === '' ? (
-            <div key={i} aria-hidden style={{ height: '0.9em' }} />
-          ) : (
-            <p
-              key={i}
-              className='font-display text-[1rem] leading-relaxed font-medium tracking-[0.18em] uppercase sm:text-[1.2rem] md:text-[1.5rem] md:leading-normal'
-              style={{
-                backgroundImage:
-                  'linear-gradient(100deg, #b07d2e 0%, #e8c06a 35%, #fbe6a8 50%, #e8c06a 65%, #b07d2e 100%)',
-                WebkitBackgroundClip: 'text',
-                backgroundClip: 'text',
-                color: 'transparent',
-                WebkitTextFillColor: 'transparent',
-                textShadow: '0 0 30px rgba(237, 179, 69, 0.18)',
-                marginTop: i === 0 ? 0 : '0.35em',
-              }}
-            >
-              {line}
-            </p>
-          )
+      <div className='flex flex-col items-center'>
+        {block?.image && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={block.image.src}
+            alt=''
+            aria-hidden
+            className='h-40 w-40 object-contain md:h-56 md:w-56'
+            style={{
+              opacity: shown ? 1 : 0,
+              transform: `translateY(${shown ? 0 : 14}px)`,
+              transition: `opacity ${dur}ms ease-in-out, transform ${dur}ms ease-in-out`,
+              filter: 'drop-shadow(0 0 30px rgba(237, 179, 69, 0.35))',
+              willChange: 'opacity, transform',
+            }}
+          />
         )}
 
-        {/* Bottom deco rule */}
-        <div
-          className='mx-auto mt-7 h-px w-24'
-          style={{
-            background:
-              'linear-gradient(to right, transparent, #c98f37 40%, #f4d488 50%, #c98f37 60%, transparent)',
-          }}
-        />
+        {hasLines && (
+          <div
+            className='mx-auto max-w-3xl px-8 text-center'
+            style={{
+              opacity: shown ? 1 : 0,
+              // Particle dissolve: glyph pixels scatter via the SVG noise filter
+              // (driven by `dispScale`) while a gentle lift + residual blur keep the
+              // edges soft — layered on top of the opacity fade for a "disintegrate
+              // into dust" feel.
+              transform: `translateY(${shown ? 0 : 14}px)`,
+              filter: `url(#${filterId}) blur(${disperse * 1.5}px)`,
+              transition: `opacity ${dur}ms ease-in-out, transform ${dur}ms ease-in-out`,
+              willChange: 'opacity, transform, filter',
+            }}
+          >
+            {/* Top deco rule */}
+            <div
+              className='mx-auto mb-7 h-px w-24'
+              style={{
+                background:
+                  'linear-gradient(to right, transparent, #c98f37 40%, #f4d488 50%, #c98f37 60%, transparent)',
+              }}
+            />
+
+            {block?.lines?.map((line, i) =>
+              // An empty string is an intentional blank line — render a spacer
+              // (an empty <p> generates no line box and collapses to zero height).
+              line === '' ? (
+                <div key={i} aria-hidden style={{ height: '0.9em' }} />
+              ) : (
+                <p
+                  key={i}
+                  className='font-display text-[1rem] leading-relaxed font-medium tracking-[0.18em] uppercase sm:text-[1.2rem] md:text-[1.5rem] md:leading-normal'
+                  style={{
+                    backgroundImage:
+                      'linear-gradient(100deg, #b07d2e 0%, #e8c06a 35%, #fbe6a8 50%, #e8c06a 65%, #b07d2e 100%)',
+                    WebkitBackgroundClip: 'text',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                    WebkitTextFillColor: 'transparent',
+                    textShadow: '0 0 30px rgba(237, 179, 69, 0.18)',
+                    marginTop: i === 0 ? 0 : '0.35em',
+                  }}
+                >
+                  {line}
+                </p>
+              )
+            )}
+
+            {/* Bottom deco rule */}
+            <div
+              className='mx-auto mt-7 h-px w-24'
+              style={{
+                background:
+                  'linear-gradient(to right, transparent, #c98f37 40%, #f4d488 50%, #c98f37 60%, transparent)',
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Full-screen black cover — handles the opening fade-in and closing fade-out */}

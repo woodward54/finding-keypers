@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { PLACEHOLDER_PHOTOS, type KeyperPhoto } from "@/lib/placeholder-photos";
+import { PLACEHOLDER_PHOTOS, type MomentPhoto } from "@/lib/placeholder-photos";
 
 function hashString(s: string) {
   let h = 0;
@@ -14,10 +14,10 @@ function hashString(s: string) {
  * The full gallery: live Convex uploads first, then the curated placeholders.
  * `isLoading` is true only while Convex is still resolving its first response.
  */
-export function useKeyperPhotos(): { photos: KeyperPhoto[]; isLoading: boolean } {
+export function useMomentPhotos(): { photos: MomentPhoto[]; isLoading: boolean } {
   const data = useQuery(api.photos.list);
 
-  const live: KeyperPhoto[] = data
+  const live: MomentPhoto[] = data
     ? data.map(
         (p: {
           id: string;

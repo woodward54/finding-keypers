@@ -1,4 +1,4 @@
-export type KeyperPhoto = {
+export type MomentPhoto = {
   id: string;
   name: string;
   url: string | null; // null => render a generated deco placeholder
@@ -30,7 +30,7 @@ const NAMES = [
 ];
 
 /** Generated deco "portraits" so the gallery looks alive before any uploads. */
-export const PLACEHOLDER_PHOTOS: KeyperPhoto[] = NAMES.map((name, i) => ({
+export const PLACEHOLDER_PHOTOS: MomentPhoto[] = NAMES.map((name, i) => ({
   id: `placeholder-${i}`,
   name,
   url: null,

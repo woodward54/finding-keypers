@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
+import { useMyMoments } from '@/lib/use-my-moments'
 
 const FRAME_COUNT = 4
 const COUNTDOWN_SECONDS = 3
@@ -27,16 +28,69 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /* --------------------------- Art Deco gif frame --------------------------- */
 
+// Shared gold colour ramp: bronze → bright cream highlight → bronze.
+const GOLD_STOPS: [number, string][] = [
+  [0, '#6e4e16'],
+  [0.2, '#c79a3c'],
+  [0.4, '#f3dd92'],
+  [0.5, '#fff6d8'],
+  [0.6, '#efd285'],
+  [0.8, '#bb8f33'],
+  [1, '#5f4413'],
+]
+
 const makeGold = (ctx: CanvasRenderingContext2D) => {
   const g = ctx.createLinearGradient(0, 0, OUT_WIDTH, OUT_HEIGHT)
-  g.addColorStop(0, '#6e4e16')
-  g.addColorStop(0.2, '#c79a3c')
-  g.addColorStop(0.4, '#f3dd92')
-  g.addColorStop(0.5, '#fff6d8')
-  g.addColorStop(0.6, '#efd285')
-  g.addColorStop(0.8, '#bb8f33')
-  g.addColorStop(1, '#5f4413')
+  for (const [stop, color] of GOLD_STOPS) g.addColorStop(stop, color)
   return g
+}
+
+// The framed footer caption, drawn in the same Cinzel display face as the rest
+// of the site. next/font generates a hashed family name exposed via the
+// --font-cinzel CSS variable; resolve it once at first use.
+const FOOTER_TEXT = 'Anjunadeep Explorations · MMXXVI'
+let _cinzelFamily = ''
+const cinzelFamily = () => {
+  if (_cinzelFamily) return _cinzelFamily
+  const v =
+    typeof window !== 'undefined'
+      ? getComputedStyle(document.documentElement).getPropertyValue('--font-cinzel').trim()
+      : ''
+  _cinzelFamily = v ? `${v}, serif` : 'serif'
+  return _cinzelFamily
+}
+
+// Ensure the display font is actually loaded before any canvas paint — a
+// 2D context silently falls back to a system serif if the face isn't ready.
+const ensureFooterFont = async () => {
+  if (typeof document === 'undefined' || !document.fonts) return
+  try {
+    await document.fonts.load(`600 20px ${cinzelFamily()}`, FOOTER_TEXT)
+  } catch {
+    // Font load is best-effort; we fall back to a serif if it fails.
+  }
+}
+
+// Shiny gold caption centred on (cx, cy). Uses a horizontal slice of the gold
+// ramp so each line catches the bright highlight sweep through its middle.
+const drawFooterCaption = (ctx: CanvasRenderingContext2D, cx: number, cy: number) => {
+  const maxWidth = OUT_WIDTH - 150
+  ctx.save()
+  ctx.font = `600 19px ${cinzelFamily()}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.letterSpacing = '5px'
+
+  const half = maxWidth / 2
+  const grad = ctx.createLinearGradient(cx - half, 0, cx + half, 0)
+  for (const [stop, color] of GOLD_STOPS) grad.addColorStop(stop, color)
+
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.6)'
+  ctx.shadowBlur = 4
+  ctx.shadowOffsetY = 1
+  ctx.fillStyle = grad
+  ctx.fillText(FOOTER_TEXT.toUpperCase(), cx, cy, maxWidth)
+  ctx.restore()
 }
 
 const strokeRect = (
@@ -51,13 +105,7 @@ const strokeRect = (
   ctx.strokeRect(x, y, w, h)
 }
 
-const line = (
-  ctx: CanvasRenderingContext2D,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number
-) => {
+const line = (ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number) => {
   ctx.beginPath()
   ctx.moveTo(x1, y1)
   ctx.lineTo(x2, y2)
@@ -174,12 +222,13 @@ const drawArtDecoFrame = (ctx: CanvasRenderingContext2D, photo: CanvasImageSourc
   drawFan(ctx, right + 11, bottom + 11, fr, 0, Math.PI * 0.5)
 
   // Lozenge ornaments centred on each edge.
-  const topY = (m + (py - 11)) / 2
-  const botY = (bottom + 11 + (H - m)) / 2
-  const leftX = (m + (px - 11)) / 2
-  const rightX = (right + 11 + (W - m)) / 2
+  const topY = (m + (py - 3)) / 2
+  const botY = (bottom + 6 + (H - m)) / 2
+  const leftX = (m + (px - 3)) / 2
+  const rightX = (right + 3 + (W - m)) / 2
   drawEdgeOrnament(ctx, W / 2, topY, 'h')
-  drawEdgeOrnament(ctx, W / 2, botY, 'h')
+  // Gilded house caption along the bottom edge, in place of the lozenge.
+  drawFooterCaption(ctx, W / 2, botY)
   drawEdgeOrnament(ctx, leftX, H / 2, 'v')
   drawEdgeOrnament(ctx, rightX, H / 2, 'v')
 }
@@ -246,6 +295,7 @@ export default function UploadPage() {
 
   const generateUploadUrl = useMutation(api.photos.generateUploadUrl)
   const savePhoto = useMutation(api.photos.savePhoto)
+  const rememberMoment = useMyMoments((s) => s.add)
 
   const stopStream = useCallback(() => {
     const tracks = streamRef.current?.getTracks() ?? []
@@ -272,13 +322,15 @@ export default function UploadPage() {
 
         const { storageId } = await res.json()
         const newId = await savePhoto({ storageId, name: name.trim() || undefined })
+        // Keep a local record so this explorer can revisit their own moments.
+        rememberMoment(newId)
         router.push(`/view/${encodeURIComponent(newId)}`)
       } catch {
         setError('Something went wrong while sealing your portraits. Try again.')
         setStage('error')
       }
     },
-    [generateUploadUrl, name, router, savePhoto]
+    [generateUploadUrl, name, router, savePhoto, rememberMoment]
   )
 
   const startCamera = useCallback(async () => {
@@ -382,7 +434,8 @@ export default function UploadPage() {
     const outCanvas = document.createElement('canvas')
     outCanvas.width = OUT_WIDTH
     outCanvas.height = OUT_HEIGHT
-    const outCtx = outCanvas.getContext('2d')
+    // We read this canvas back (getImageData) once per frame to encode it.
+    const outCtx = outCanvas.getContext('2d', { willReadFrequently: true })
 
     for (const frame of frames) {
       if (!photoCtx || !outCtx) break
@@ -433,6 +486,8 @@ export default function UploadPage() {
     setStage('encoding')
     // Yield so the "developing" state can paint before the encode blocks.
     await sleep(50)
+    // The frame caption is painted on canvas, which needs the font preloaded.
+    await ensureFooterFont()
     const gifBlob = encodeGif(frames)
     setPreview(URL.createObjectURL(gifBlob))
     stopStream()

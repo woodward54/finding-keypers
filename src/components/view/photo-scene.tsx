@@ -1,6 +1,6 @@
 'use client'
 
-import type { KeyperPhoto } from '@/lib/placeholder-photos'
+import type { MomentPhoto } from '@/lib/placeholder-photos'
 import {
   Environment,
   Lightformer,
@@ -357,7 +357,7 @@ function DecoImage({ seed }: { seed: number }) {
 }
 
 /* -------------------------------- Scene ----------------------------------- */
-function SceneContents({ photo }: { photo: KeyperPhoto }) {
+function SceneContents({ photo }: { photo: MomentPhoto }) {
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 3, 8]} fov={45} />
@@ -424,7 +424,7 @@ function SceneContents({ photo }: { photo: KeyperPhoto }) {
   )
 }
 
-export function PhotoScene({ photo }: { photo: KeyperPhoto }) {
+export function PhotoScene({ photo }: { photo: MomentPhoto }) {
   return (
     <Canvas
       dpr={[1, 1.5]}

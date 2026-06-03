@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { PhotoTile } from "@/components/photo-tile";
-import { type KeyperPhoto } from "@/lib/placeholder-photos";
-import { useKeyperPhotos } from "@/lib/use-keyper-photos";
+import { type MomentPhoto } from "@/lib/placeholder-photos";
+import { useMomentPhotos } from "@/lib/use-moment-photos";
 
 // Each column scrolls at a slightly different pace for a layered parallax feel.
 const DURATIONS = ["44s", "58s", "50s", "64s"];
@@ -21,14 +21,14 @@ function useColumnCount() {
   return cols;
 }
 
-function splitIntoColumns(photos: KeyperPhoto[], n: number) {
-  const cols: KeyperPhoto[][] = Array.from({ length: n }, () => []);
+function splitIntoColumns(photos: MomentPhoto[], n: number) {
+  const cols: MomentPhoto[][] = Array.from({ length: n }, () => []);
   photos.forEach((p, i) => cols[i % n].push(p));
   return cols;
 }
 
 export function Gallery() {
-  const { photos } = useKeyperPhotos();
+  const { photos } = useMomentPhotos();
   const columnCount = useColumnCount();
   const columns = splitIntoColumns(photos, columnCount);
 
