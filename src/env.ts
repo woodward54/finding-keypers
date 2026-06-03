@@ -19,6 +19,8 @@ export const env = createEnv({
     NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL,
   },
 
+  skipValidation: !!process.env.SKIP_ENV_VALIDATION,
+
   /** Treat empty strings as undefined rather than valid values. */
   emptyStringAsUndefined: true,
-});
+})
