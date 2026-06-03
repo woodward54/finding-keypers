@@ -5,12 +5,10 @@ export const env = createEnv({
   /**
    * Client-side variables. Must be prefixed with `NEXT_PUBLIC_`.
    *
-   * `NEXT_PUBLIC_CONVEX_URL` is written by `npx convex dev`. It's optional so
-   * the app still boots in "preview mode" (placeholder gallery) before a
-   * deployment is connected.
+   * `NEXT_PUBLIC_CONVEX_URL` is written by `npx convex dev`.
    */
   client: {
-    NEXT_PUBLIC_CONVEX_URL: z.url().optional(),
+    NEXT_PUBLIC_CONVEX_URL: z.url(),
   },
 
   /**

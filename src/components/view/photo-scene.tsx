@@ -10,7 +10,7 @@ import {
 } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
-import { Suspense, useMemo, useRef } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { FadingSparkles } from './fading-sparkles'
 import { GlowFloor } from './glow-floor'
@@ -234,17 +234,121 @@ function FloatingPlane({ tex, aspect }: { tex: THREE.Texture; aspect: number }) 
   )
 }
 
+type GifFrame = { bitmap: ImageBitmap; duration: number }
+
+/**
+ * Renders a photo URL onto the floating plane. GIFs are decoded frame-by-frame
+ * and animated by repainting a CanvasTexture each tick — a plain WebGL texture
+ * only ever shows a GIF's first frame. Static images (or browsers without
+ * `ImageDecoder`) fall back to a single painted frame.
+ */
 function UrlImage({ url }: { url: string }) {
-  const sourceTex = useTexture(url)
-  const tex = useMemo(() => {
-    const configuredTexture = sourceTex.clone()
-    configuredTexture.colorSpace = THREE.SRGBColorSpace
-    configuredTexture.needsUpdate = true
-    return configuredTexture
-  }, [sourceTex])
-  const img = tex.image as { width: number; height: number } | undefined
-  const aspect = img && img.height ? img.width / img.height : 3 / 4
-  return <FloatingPlane tex={tex} aspect={aspect} />
+  // One offscreen canvas drives a CanvasTexture. We only build the texture
+  // *after* the canvas has been sized to the first decoded frame — creating it
+  // against the default 300×150 canvas makes Three allocate texture storage at
+  // that size, and the next (larger) upload overflows it
+  // (GL_INVALID_VALUE: glCopySubTextureCHROMIUM offset overflows).
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const framesRef = useRef<GifFrame[]>([])
+  const frameIndexRef = useRef(0)
+  const elapsedRef = useRef(0)
+  const textureRef = useRef<THREE.CanvasTexture | null>(null)
+
+  const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null)
+  const [aspect, setAspect] = useState(3 / 4)
+
+  useEffect(() => {
+    let cancelled = false
+    const canvas = document.createElement('canvas')
+    canvasRef.current = canvas
+    const ctx = canvas.getContext('2d')
+
+    const present = (source: CanvasImageSource, w: number, h: number) => {
+      if (!ctx) return
+      canvas.width = w
+      canvas.height = h
+      ctx.drawImage(source, 0, 0, w, h)
+      const tex = new THREE.CanvasTexture(canvas)
+      tex.colorSpace = THREE.SRGBColorSpace
+      textureRef.current = tex
+      setAspect(w / h)
+      setTexture(tex)
+    }
+
+    const load = async () => {
+      try {
+        const res = await fetch(url)
+        const blob = await res.blob()
+
+        if (blob.type === 'image/gif' && typeof ImageDecoder !== 'undefined') {
+          const decoder = new ImageDecoder({
+            data: await blob.arrayBuffer(),
+            type: blob.type,
+          })
+          await decoder.tracks.ready
+          const count = decoder.tracks.selectedTrack?.frameCount ?? 1
+          const frames: GifFrame[] = []
+          for (let i = 0; i < count; i++) {
+            const { image } = await decoder.decode({ frameIndex: i })
+            const bitmap = await createImageBitmap(image)
+            // VideoFrame.duration is in microseconds; default to 100ms.
+            frames.push({ bitmap, duration: (image.duration ?? 100_000) / 1000 })
+            image.close()
+          }
+          if (cancelled) {
+            for (const f of frames) f.bitmap.close()
+            return
+          }
+          framesRef.current = frames
+          const first = frames[0].bitmap
+          present(first, first.width, first.height)
+          return
+        }
+
+        // Static image (or no ImageDecoder support): present a single frame.
+        const bitmap = await createImageBitmap(blob)
+        if (cancelled) {
+          bitmap.close()
+          return
+        }
+        present(bitmap, bitmap.width, bitmap.height)
+      } catch {
+        // Leave the plane blank if the photo can't be decoded.
+      }
+    }
+
+    void load()
+
+    return () => {
+      cancelled = true
+      for (const f of framesRef.current) f.bitmap.close()
+      framesRef.current = []
+      textureRef.current?.dispose()
+      textureRef.current = null
+    }
+  }, [url])
+
+  useFrame((_, delta) => {
+    const frames = framesRef.current
+    const tex = textureRef.current
+    const canvas = canvasRef.current
+    if (!tex || !canvas || frames.length <= 1) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    elapsedRef.current += delta * 1000
+    let current = frames[frameIndexRef.current]
+    while (elapsedRef.current >= current.duration) {
+      elapsedRef.current -= current.duration
+      frameIndexRef.current = (frameIndexRef.current + 1) % frames.length
+      current = frames[frameIndexRef.current]
+    }
+    ctx.drawImage(current.bitmap, 0, 0, canvas.width, canvas.height)
+    tex.needsUpdate = true
+  })
+
+  if (!texture) return null
+  return <FloatingPlane tex={texture} aspect={aspect} />
 }
 
 function DecoImage({ seed }: { seed: number }) {

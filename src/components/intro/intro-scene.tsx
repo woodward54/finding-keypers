@@ -24,19 +24,16 @@ const DEFAULT_FADE_IN = 1200
 const DEFAULT_FADE_OUT = 1800
 
 const BLOCKS: Block[] = [
-  { lines: ['Welcome, explorers.'], hold: 5000, delay: 4500 },
+  { lines: ['Welcome, explorers.'], hold: 4250, delay: 4500 },
   {
     lines: [
       'Among thousands of paths,',
       'yours crossed here.',
       '',
-      'Through curiosity',
-      '',
-      'through Anjuna',
-      '',
+      'Through curiosity, Anjuna',
       'and through unlocking this hidden box.',
     ],
-    hold: 8000,
+    hold: 6800,
   },
   {
     lines: ['But not all treasures are meant', 'to stay hidden forever.'],
@@ -44,7 +41,7 @@ const BLOCKS: Block[] = [
   },
   {
     lines: ["They're meant to be shared."],
-    hold: 3400,
+    hold: 2890,
     fadeOut: 4000,
   },
   {
@@ -56,29 +53,17 @@ const BLOCKS: Block[] = [
       'Leave this world a little',
       'more connected than you found it.',
     ],
-    hold: 9000,
+    hold: 7650,
   },
-  {
-    lines: ['Explore the sonderic entropy'],
-    hold: 6000,
-    fadeOut: 2500,
-  },
-  {
-    // "(long fade out)" — give this block an extended exit.
-    lines: ["Now it's up to you", '', 'to continue the story…'],
-    hold: 5000,
-    fadeOut: 3800,
-  },
-  { lines: ['But first…'], hold: 3000 },
+  { lines: ['But first…'], hold: 2550 },
   {
     lines: [
-      'Stand together.',
-      'Capture this moment.',
-      'So one day when this becomes a memory,',
-      'you\'ll remember when',
+      'Capture the moment.',
+      'So when this becomes a memory,',
+      "you'll remember when",
       'two worlds briefly became one…',
     ],
-    hold: 9000,
+    hold: 7650,
     fadeOut: 3000,
   },
 ]
