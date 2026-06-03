@@ -11,7 +11,8 @@
     "dev:frontend": "next dev -p 3024",
     "dev:backend": "convex dev --local",
     "type-check": "tsc --noEmit",
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache"
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
+    "convex:deploy": "convex deploy"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
