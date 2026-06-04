@@ -4,6 +4,21 @@ import type { NextConfig } from 'next'
 // import './src/env'
 
 const nextConfig: NextConfig = {
+  transpilePackages: ['three'],
+
+  // React compiler does not work with tanstack table
+  reactCompiler: false,
+
+  // Performance optimizations
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+  },
+
+  // Turbopack config
+  turbopack: {
+    // Turbopack has built-in optimized file watching - no watchOptions needed
+  },
+
   /* config options here */
   images: {
     minimumCacheTTL: 2678400,
@@ -25,6 +40,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+
+  // This is required to support PostHog trailing slash API requests
+  skipTrailingSlashRedirect: true,
 }
 
 export default nextConfig
