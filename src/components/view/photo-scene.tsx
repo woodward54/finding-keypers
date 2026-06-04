@@ -242,11 +242,11 @@ function FloatingPlane({ tex, aspect }: { tex: THREE.Texture; aspect: number }) 
   )
 }
 
-type GifFrame =
+type AnimFrame =
   | { kind: 'bitmap'; bitmap: ImageBitmap; duration: number }
   | { kind: 'image-data'; imageData: ImageData; duration: number }
 
-function closeGifFrames(frames: GifFrame[]) {
+function closeAnimFrames(frames: AnimFrame[]) {
   for (const frame of frames) {
     if (frame.kind === 'bitmap') frame.bitmap.close()
   }
@@ -267,7 +267,7 @@ function decodeGifWithGifuct(arrayBuffer: ArrayBuffer) {
   if (!fullCtx || !patchCtx) return null
 
   let previousFrame: ParsedFrame | null = null
-  const frames: GifFrame[] = []
+  const frames: AnimFrame[] = []
 
   for (const frame of parsedFrames) {
     if (previousFrame?.disposalType === 2) {
@@ -295,9 +295,11 @@ function decodeGifWithGifuct(arrayBuffer: ArrayBuffer) {
 }
 
 /**
- * Renders a photo URL onto the floating plane. GIFs are decoded frame-by-frame
- * and animated by repainting a CanvasTexture each tick. `ImageDecoder` is used
- * first when available, with `gifuct-js` as a fallback for mobile browsers.
+ * Renders a photo URL onto the floating plane. Animated images (WebP or GIF)
+ * are decoded frame-by-frame and animated by repainting a CanvasTexture each
+ * tick. `ImageDecoder` (WebCodecs) handles both formats natively; where it is
+ * unavailable we fall back to `gifuct-js` for GIFs, and to a static first
+ * frame for animated WebP.
  */
 function UrlImage({ url }: { url: string }) {
   // One offscreen canvas drives a CanvasTexture. We only build the texture
@@ -306,7 +308,7 @@ function UrlImage({ url }: { url: string }) {
   // that size, and the next (larger) upload overflows it
   // (GL_INVALID_VALUE: glCopySubTextureCHROMIUM offset overflows).
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const framesRef = useRef<GifFrame[]>([])
+  const framesRef = useRef<AnimFrame[]>([])
   const frameIndexRef = useRef(0)
   const elapsedRef = useRef(0)
   const textureRef = useRef<THREE.CanvasTexture | null>(null)
@@ -350,20 +352,23 @@ function UrlImage({ url }: { url: string }) {
       try {
         const res = await fetch(url)
         const blob = await res.blob()
-        const isGif = blob.type === 'image/gif' || url.toLowerCase().includes('.gif')
+        const lower = url.toLowerCase()
+        const isGif = blob.type === 'image/gif' || lower.includes('.gif')
+        const isWebp = blob.type === 'image/webp' || lower.includes('.webp')
 
-        if (isGif) {
+        if (isGif || isWebp) {
           const arrayBuffer = await blob.arrayBuffer()
 
+          // WebCodecs decodes animated WebP and GIF alike, frame by frame.
           if (typeof ImageDecoder !== 'undefined') {
             try {
               const decoder = new ImageDecoder({
                 data: arrayBuffer.slice(0),
-                type: blob.type || 'image/gif',
+                type: blob.type || (isGif ? 'image/gif' : 'image/webp'),
               })
               await decoder.tracks.ready
               const count = decoder.tracks.selectedTrack?.frameCount ?? 1
-              const frames: GifFrame[] = []
+              const frames: AnimFrame[] = []
               for (let i = 0; i < count; i++) {
                 const { image } = await decoder.decode({ frameIndex: i })
                 const bitmap = await createImageBitmap(image)
@@ -375,7 +380,7 @@ function UrlImage({ url }: { url: string }) {
                 image.close()
               }
               if (cancelled) {
-                closeGifFrames(frames)
+                closeAnimFrames(frames)
                 return
               }
               framesRef.current = frames
@@ -385,24 +390,28 @@ function UrlImage({ url }: { url: string }) {
                 return
               }
             } catch {
-              // Fall through to gifuct-js for browsers with incomplete GIF decoding.
+              // Fall through: gifuct-js for GIFs, a static first frame for WebP.
             }
           }
 
-          const decodedGif = decodeGifWithGifuct(arrayBuffer)
-          if (!decodedGif) return
-          if (cancelled) {
+          // gifuct-js only understands GIF. Animated WebP without WebCodecs
+          // degrades to its first frame via the static path below.
+          if (isGif) {
+            const decodedGif = decodeGifWithGifuct(arrayBuffer)
+            if (!decodedGif) return
+            if (cancelled) {
+              return
+            }
+            framesRef.current = decodedGif.frames
+            const first = decodedGif.frames[0]
+            if (first?.kind === 'image-data') {
+              presentImageData(first.imageData, decodedGif.width, decodedGif.height)
+            }
             return
           }
-          framesRef.current = decodedGif.frames
-          const first = decodedGif.frames[0]
-          if (first?.kind === 'image-data') {
-            presentImageData(first.imageData, decodedGif.width, decodedGif.height)
-          }
-          return
         }
 
-        // Static image (or no ImageDecoder support): present a single frame.
+        // Static image (or animated WebP without WebCodecs): present one frame.
         const bitmap = await createImageBitmap(blob)
         if (cancelled) {
           bitmap.close()
@@ -418,7 +427,7 @@ function UrlImage({ url }: { url: string }) {
 
     return () => {
       cancelled = true
-      closeGifFrames(framesRef.current)
+      closeAnimFrames(framesRef.current)
       framesRef.current = []
       textureRef.current?.dispose()
       textureRef.current = null

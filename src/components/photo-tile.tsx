@@ -11,9 +11,10 @@ import { useEffect, useState } from 'react'
 const ENTRANCE_MAX_DELAY_MS = 700
 
 export function PhotoTile({ photo, className }: { photo: MomentPhoto; className?: string }) {
-  // Gif tiles show the generated deco placeholder immediately and fade the gif
-  // in once it has downloaded, so every tile (in every column) appears at once
-  // and the real frames stream in progressively rather than column-by-column.
+  // Photo tiles show the generated deco placeholder immediately and fade the
+  // animated WebP in once it has downloaded, so every tile (in every column)
+  // appears at once and the real frames stream in progressively rather than
+  // column-by-column.
   const [loaded, setLoaded] = useState(false)
   // Staggered entrance: hidden on mount, revealed after a per-tile random delay.
   const [entered, setEntered] = useState(false)
@@ -39,7 +40,7 @@ export function PhotoTile({ photo, className }: { photo: MomentPhoto; className?
       <div className='aspect-[3/4] w-full overflow-hidden'>
         {photo.url ? (
           <div className='relative h-full w-full transition-transform duration-700 ease-out group-hover:scale-105'>
-            {/* Instant placeholder, kept mounted under the gif until it loads. */}
+            {/* Instant placeholder, kept mounted under the image until it loads. */}
             <div
               className={cn(
                 'absolute inset-0 transition-opacity duration-700',

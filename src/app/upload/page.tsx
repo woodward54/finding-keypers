@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { useMutation } from 'convex/react'
 import posthog from 'posthog-js'
-import { applyPalette, GIFEncoder, quantize } from 'gifenc'
+import { muxAnimatedWebp, type WebpFrame } from '@/lib/animated-webp'
 import { ArrowLeft, Camera, Loader2, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -13,21 +13,23 @@ import { useMyMoments } from '@/lib/use-my-moments'
 
 const FRAME_COUNT = 3
 const COUNTDOWN_SECONDS = 3
-const FRAME_DELAY_MS = 500 // playback speed of each frame in the gif
-const GIF_WIDTH = 480
-const GIF_HEIGHT = 640
+const FRAME_DELAY_MS = 500 // playback speed of each frame in the animation
+// Quality (0–1) handed to canvas.toBlob when encoding each still WebP frame.
+const WEBP_QUALITY = 0.82
+const PHOTO_WIDTH = 480
+const PHOTO_HEIGHT = 640
 
 // Padding (in px) baked around the photo for the art deco frame, and the
-// resulting full canvas size that gets encoded into the gif.
+// resulting full canvas size that gets encoded into the animated WebP.
 const FRAME_PAD = 72
-const OUT_WIDTH = GIF_WIDTH + FRAME_PAD * 2
-const OUT_HEIGHT = GIF_HEIGHT + FRAME_PAD * 2
+const OUT_WIDTH = PHOTO_WIDTH + FRAME_PAD * 2
+const OUT_HEIGHT = PHOTO_HEIGHT + FRAME_PAD * 2
 
 type Stage = 'starting' | 'live' | 'capturing' | 'encoding' | 'uploading' | 'error'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-/* --------------------------- Art Deco gif frame --------------------------- */
+/* --------------------------- Art Deco animated frame --------------------------- */
 
 // Shared gold colour ramp: bronze → bright cream highlight → bronze.
 const GOLD_STOPS: [number, string][] = [
@@ -194,7 +196,7 @@ const drawArtDecoFrame = (ctx: CanvasRenderingContext2D, photo: CanvasImageSourc
   ctx.fillRect(0, 0, W, H)
 
   // The photo, inset by the padding.
-  ctx.drawImage(photo, FRAME_PAD, FRAME_PAD, GIF_WIDTH, GIF_HEIGHT)
+  ctx.drawImage(photo, FRAME_PAD, FRAME_PAD, PHOTO_WIDTH, PHOTO_HEIGHT)
 
   const gold = makeGold(ctx)
   ctx.strokeStyle = gold
@@ -203,12 +205,12 @@ const drawArtDecoFrame = (ctx: CanvasRenderingContext2D, photo: CanvasImageSourc
 
   const px = FRAME_PAD
   const py = FRAME_PAD
-  const right = px + GIF_WIDTH
-  const bottom = py + GIF_HEIGHT
+  const right = px + PHOTO_WIDTH
+  const bottom = py + PHOTO_HEIGHT
 
   // Double bezel hugging the photo.
-  strokeRect(ctx, px - 5, py - 5, GIF_WIDTH + 10, GIF_HEIGHT + 10, 3)
-  strokeRect(ctx, px - 11, py - 11, GIF_WIDTH + 22, GIF_HEIGHT + 22, 1.5)
+  strokeRect(ctx, px - 5, py - 5, PHOTO_WIDTH + 10, PHOTO_HEIGHT + 10, 3)
+  strokeRect(ctx, px - 11, py - 11, PHOTO_WIDTH + 22, PHOTO_HEIGHT + 22, 1.5)
 
   // Outer border near the canvas edge.
   const m = 12
@@ -309,15 +311,15 @@ export default function UploadPage() {
     streamRef.current = null
   }, [])
 
-  const uploadGif = useCallback(
-    async (gifBlob: Blob) => {
+  const uploadWebp = useCallback(
+    async (webpBlob: Blob) => {
       setStage('uploading')
       try {
         const postUrl = await generateUploadUrl()
         const res = await fetch(postUrl, {
           method: 'POST',
-          headers: { 'Content-Type': gifBlob.type },
-          body: gifBlob,
+          headers: { 'Content-Type': webpBlob.type },
+          body: webpBlob,
         })
 
         if (!res.ok) {
@@ -408,13 +410,13 @@ export default function UploadPage() {
   }, [preview])
 
   // Grab the current video frame, center-cropped to a mirrored 3:4 portrait
-  // sized for the gif, and return its raw pixels.
+  // sized for the animation, and return its raw pixels.
   const captureFrame = useCallback((): ImageData | null => {
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas) return null
-    canvas.width = GIF_WIDTH
-    canvas.height = GIF_HEIGHT
+    canvas.width = PHOTO_WIDTH
+    canvas.height = PHOTO_HEIGHT
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) return null
     const srcSize = Math.min(video.videoWidth, video.videoHeight)
@@ -424,45 +426,49 @@ export default function UploadPage() {
     const sy = (video.videoHeight - sh) / 2
     ctx.save()
     // Mirror to match the preview the user sees.
-    ctx.translate(GIF_WIDTH, 0)
+    ctx.translate(PHOTO_WIDTH, 0)
     ctx.scale(-1, 1)
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, GIF_WIDTH, GIF_HEIGHT)
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, PHOTO_WIDTH, PHOTO_HEIGHT)
     ctx.restore()
-    return ctx.getImageData(0, 0, GIF_WIDTH, GIF_HEIGHT)
+    return ctx.getImageData(0, 0, PHOTO_WIDTH, PHOTO_HEIGHT)
   }, [])
 
-  const encodeGif = useCallback((frames: ImageData[]): Blob => {
-    const encoder = GIFEncoder()
-
+  const encodeWebp = useCallback(async (frames: ImageData[]): Promise<Blob> => {
     // Scratch canvas holding one raw photo frame, drawn into the framed canvas.
     const photoCanvas = document.createElement('canvas')
-    photoCanvas.width = GIF_WIDTH
-    photoCanvas.height = GIF_HEIGHT
+    photoCanvas.width = PHOTO_WIDTH
+    photoCanvas.height = PHOTO_HEIGHT
     const photoCtx = photoCanvas.getContext('2d')
 
-    // The framed canvas that actually gets encoded.
+    // The framed canvas each frame is composited onto and encoded from.
     const outCanvas = document.createElement('canvas')
     outCanvas.width = OUT_WIDTH
     outCanvas.height = OUT_HEIGHT
-    // We read this canvas back (getImageData) once per frame to encode it.
-    const outCtx = outCanvas.getContext('2d', { willReadFrequently: true })
+    const outCtx = outCanvas.getContext('2d')
+    if (!photoCtx || !outCtx) throw new Error('Could not get a drawing context')
 
+    // Each composited frame is encoded as its own still WebP via the browser's
+    // native encoder; we await one before drawing the next so the shared canvas
+    // is never overwritten mid-encode. The stills are then muxed into a single
+    // animated WebP.
+    const webpFrames: WebpFrame[] = []
     for (const frame of frames) {
-      if (!photoCtx || !outCtx) break
       // Age the photo before it goes inside the (still-golden) frame.
       applyVintageFilter(frame)
       photoCtx.putImageData(frame, 0, 0)
       drawArtDecoFrame(outCtx, photoCanvas)
-      const composited = outCtx.getImageData(0, 0, OUT_WIDTH, OUT_HEIGHT)
-      // 128-colour palette: keeps the sepia/gold look near-identical to a full
-      // 256 ramp while roughly halving the encoded gif size for low-bandwidth
-      // gallery loads.
-      const palette = quantize(composited.data, 128)
-      const index = applyPalette(composited.data, palette)
-      encoder.writeFrame(index, OUT_WIDTH, OUT_HEIGHT, { palette, delay: FRAME_DELAY_MS })
+      const blob = await new Promise<Blob | null>((resolve) =>
+        outCanvas.toBlob(resolve, 'image/webp', WEBP_QUALITY)
+      )
+      if (!blob) throw new Error('This browser cannot encode WebP images')
+      webpFrames.push({
+        data: new Uint8Array(await blob.arrayBuffer()),
+        width: OUT_WIDTH,
+        height: OUT_HEIGHT,
+        duration: FRAME_DELAY_MS,
+      })
     }
-    encoder.finish()
-    return new Blob([encoder.bytes()], { type: 'image/gif' })
+    return muxAnimatedWebp(webpFrames, { loop: 0 })
   }, [])
 
   const runPhotoBooth = useCallback(async () => {
@@ -504,21 +510,21 @@ export default function UploadPage() {
     // The frame caption is painted on canvas, which needs the font preloaded.
     await ensureFooterFont()
     try {
-      const gifBlob = encodeGif(frames)
+      const webpBlob = await encodeWebp(frames)
       posthog.capture('photo_captured', {
         frame_count: frames.length,
         has_name: name.trim().length > 0,
       })
-      setPreview(URL.createObjectURL(gifBlob))
+      setPreview(URL.createObjectURL(webpBlob))
       stopStream()
-      await uploadGif(gifBlob)
+      await uploadWebp(webpBlob)
     } catch (err) {
       posthog.captureException(err)
       setError('We couldn’t develop your portraits. Try again.')
       setFadeToBlack(false)
       setStage('error')
     }
-  }, [captureFrame, encodeGif, name, stopStream, uploadGif])
+  }, [captureFrame, encodeWebp, name, stopStream, uploadWebp])
 
   const retake = useCallback(() => {
     posthog.capture('capture_retried')
@@ -568,7 +574,7 @@ export default function UploadPage() {
             }`}
           />
 
-          {/* Captured gif preview */}
+          {/* Captured animation preview */}
           {/* {preview && (stage === 'encoding' || stage === 'uploading') && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
