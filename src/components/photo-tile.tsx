@@ -4,13 +4,24 @@ import { DecoPortrait } from '@/components/deco-art'
 import type { MomentPhoto } from '@/lib/placeholder-photos'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+
+// Each tile starts hidden and fades in after a random delay in this range, so
+// the gallery assembles itself in a scattered, staggered shimmer on load.
+const ENTRANCE_MAX_DELAY_MS = 700
 
 export function PhotoTile({ photo, className }: { photo: MomentPhoto; className?: string }) {
   // Gif tiles show the generated deco placeholder immediately and fade the gif
   // in once it has downloaded, so every tile (in every column) appears at once
   // and the real frames stream in progressively rather than column-by-column.
   const [loaded, setLoaded] = useState(false)
+  // Staggered entrance: hidden on mount, revealed after a per-tile random delay.
+  const [entered, setEntered] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setEntered(true), Math.random() * ENTRANCE_MAX_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [])
 
   return (
     <Link
@@ -18,8 +29,9 @@ export function PhotoTile({ photo, className }: { photo: MomentPhoto; className?
       aria-label={`View ${photo.name}`}
       className={cn(
         'group border-bronze/40 bg-noir relative block overflow-hidden rounded-md border',
-        'shadow-[0_8px_30px_-12px_rgba(0,0,0,0.9)] transition-all duration-500',
+        'shadow-[0_8px_30px_-12px_rgba(0,0,0,0.9)] transition-all duration-1000 ease-in',
         'hover:border-gold hover:shadow-gold hover:-translate-y-1',
+        entered ? 'opacity-100' : 'opacity-0',
         className
       )}
     >

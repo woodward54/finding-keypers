@@ -3,16 +3,18 @@ import { Cinzel, Jost } from "next/font/google";
 import "./globals.css";
 import { ConvexClientProvider } from "@/components/convex-provider";
 
+// Both are variable fonts, so we omit `weight` to load a single variable file
+// per family (all weights available via the wght axis). Passing a weight array
+// would emit one static woff2 per weight, each preloaded — and the ones not used
+// on first paint trigger "preloaded but not used" console warnings.
 const cinzel = Cinzel({
   variable: "--font-cinzel",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
 });
 
 const jost = Jost({
   variable: "--font-jost",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600"],
 });
 
 export const metadata: Metadata = {

@@ -43,7 +43,7 @@ export default function Home() {
             <MyMomentsButton />
           </div>
 
-          <div className='deco-rule mx-auto mt-7 h-[3px] w-48 sm:w-72' />
+          {/* <div className='deco-rule mx-auto mt-7 h-[3px] w-48 sm:w-72' /> */}
         </section>
 
         {/* Scrolling gilded gallery */}
