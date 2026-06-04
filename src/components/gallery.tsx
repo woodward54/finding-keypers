@@ -14,7 +14,7 @@ const DURATIONS = [44, 58, 50, 64];
 // is ~2× taller. The marquee always travels a fixed -50% of that height in a
 // fixed time, so the scroll runs noticeably faster there. Stretch the duration
 // on mobile to ease the speed back down.
-const MOBILE_SLOWDOWN = 2;
+const MOBILE_SLOWDOWN = 1.4;
 
 /** 2 columns on mobile, 4 from the `md` breakpoint up. */
 function useColumnCount() {

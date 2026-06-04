@@ -23,7 +23,7 @@ type Block = {
   delay?: number // beat of black before this block fades in (ms)
 }
 
-const DEFAULT_FADE_IN = 800
+const DEFAULT_FADE_IN = 1000
 const DEFAULT_FADE_OUT = 1800
 
 const BLOCKS: Block[] = [
@@ -56,7 +56,7 @@ const BLOCKS: Block[] = [
       'Leave this world a little',
       'more connected than you found it.',
     ],
-    hold: 7650,
+    hold: 6000,
   },
   { lines: ['But first…'], hold: 2000 },
   {

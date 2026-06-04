@@ -258,7 +258,12 @@
     mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
   }
 
-  .pause-on-hover:hover * {
-    animation-play-state: paused;
+  /* Pause the marquee on hover, but only for true hover-capable pointers.
+     On touch screens a scroll over a tile fires a sticky :hover that would
+     freeze the marquee until the user taps elsewhere. */
+  @media (hover: hover) and (pointer: fine) {
+    .pause-on-hover:hover * {
+      animation-play-state: paused;
+    }
   }
 }
