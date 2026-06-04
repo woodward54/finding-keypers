@@ -5,8 +5,16 @@ import { PhotoTile } from "@/components/photo-tile";
 import { type MomentPhoto } from "@/lib/placeholder-photos";
 import { useMomentPhotos } from "@/lib/use-moment-photos";
 
-// Each column scrolls at a slightly different pace for a layered parallax feel.
-const DURATIONS = ["44s", "58s", "50s", "64s"];
+// Base per-column scroll durations (seconds), tuned for the 4-column desktop
+// layout. Each column scrolls at a slightly different pace for a layered
+// parallax feel.
+const DURATIONS = [44, 58, 50, 64];
+
+// Mobile shows 2 columns instead of 4, so each column holds ~2× the photos and
+// is ~2× taller. The marquee always travels a fixed -50% of that height in a
+// fixed time, so the scroll runs noticeably faster there. Stretch the duration
+// on mobile to ease the speed back down.
+const MOBILE_SLOWDOWN = 2;
 
 /** 2 columns on mobile, 4 from the `md` breakpoint up. */
 function useColumnCount() {
@@ -31,6 +39,8 @@ export function Gallery() {
   const { photos } = useMomentPhotos();
   const columnCount = useColumnCount();
   const columns = splitIntoColumns(photos, columnCount);
+  // Fewer columns ⇒ taller columns ⇒ faster scroll, so slow the marquee on mobile.
+  const speedScale = columnCount < 4 ? MOBILE_SLOWDOWN : 1;
 
   return (
     <div className="mask-fade-y relative grid h-[78vh] grid-cols-2 gap-3 overflow-hidden px-3 sm:gap-4 sm:px-4 md:h-[82vh] md:grid-cols-4 md:gap-5">
@@ -47,7 +57,7 @@ export function Gallery() {
               }
               style={
                 {
-                  "--marquee-duration": DURATIONS[ci % DURATIONS.length],
+                  "--marquee-duration": `${DURATIONS[ci % DURATIONS.length] * speedScale}s`,
                 } as React.CSSProperties
               }
             >

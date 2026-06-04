@@ -1,9 +1,17 @@
+'use client'
+
 import { DecoPortrait } from '@/components/deco-art'
 import type { MomentPhoto } from '@/lib/placeholder-photos'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import { useState } from 'react'
 
 export function PhotoTile({ photo, className }: { photo: MomentPhoto; className?: string }) {
+  // Gif tiles show the generated deco placeholder immediately and fade the gif
+  // in once it has downloaded, so every tile (in every column) appears at once
+  // and the real frames stream in progressively rather than column-by-column.
+  const [loaded, setLoaded] = useState(false)
+
   return (
     <Link
       href={`/view/${encodeURIComponent(photo.id)}`}
@@ -18,13 +26,27 @@ export function PhotoTile({ photo, className }: { photo: MomentPhoto; className?
       {/* Image / generated portrait */}
       <div className='aspect-[3/4] w-full overflow-hidden'>
         {photo.url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={photo.url}
-            alt={photo.name}
-            className='h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105'
-            loading='lazy'
-          />
+          <div className='relative h-full w-full transition-transform duration-700 ease-out group-hover:scale-105'>
+            {/* Instant placeholder, kept mounted under the gif until it loads. */}
+            <div
+              className={cn(
+                'absolute inset-0 transition-opacity duration-700',
+                loaded ? 'opacity-0' : 'opacity-100'
+              )}
+            >
+              <DecoPortrait seed={photo.seed} />
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photo.url}
+              alt={photo.name}
+              onLoad={() => setLoaded(true)}
+              className={cn(
+                'relative h-full w-full object-cover transition-opacity duration-700',
+                loaded ? 'opacity-100' : 'opacity-0'
+              )}
+            />
+          </div>
         ) : (
           <div className='h-full w-full transition-transform duration-700 ease-out group-hover:scale-105'>
             <DecoPortrait seed={photo.seed} />

@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
 import { useMyMoments } from '@/lib/use-my-moments'
 
-const FRAME_COUNT = 4
+const FRAME_COUNT = 3
 const COUNTDOWN_SECONDS = 3
 const FRAME_DELAY_MS = 500 // playback speed of each frame in the gif
 const GIF_WIDTH = 480
@@ -564,15 +564,16 @@ export default function UploadPage() {
               stage === 'live' || stage === 'starting' || stage === 'capturing' ? 'block' : 'hidden'
             }`}
           />
+
           {/* Captured gif preview */}
-          {preview && (stage === 'encoding' || stage === 'uploading') && (
+          {/* {preview && (stage === 'encoding' || stage === 'uploading') && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={preview}
               alt='Your photo booth strip'
               className='h-full w-full object-cover'
             />
-          )}
+          )} */}
 
           {stage === 'starting' && (
             <div className='bg-noir/80 absolute inset-0 flex items-center justify-center'>

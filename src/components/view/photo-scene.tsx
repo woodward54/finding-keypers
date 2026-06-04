@@ -10,6 +10,7 @@ import {
 } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
+import { decompressFrames, parseGIF, type ParsedFrame } from 'gifuct-js'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { FadingSparkles } from './fading-sparkles'
@@ -83,6 +84,8 @@ const FRAME_TIERS = [
 function DecoFrame({ w, h }: { w: number; h: number }) {
   const cfg: FrameMaterialConfig = FRAME_MATERIALS[FRAME_MATERIAL]
   const fadeRef = useRef(0)
+  const matHRef = useRef<THREE.MeshStandardMaterial | null>(null)
+  const matVRef = useRef<THREE.MeshStandardMaterial | null>(null)
   const textures = useTexture({
     map: cfg.map,
     normalMap: cfg.normalMap,
@@ -139,10 +142,15 @@ function DecoFrame({ w, h }: { w: number; h: number }) {
   const by = h / 2 + FRAME_W / 2 // centre of the horizontal bars
   const cy = h / 2 + FRAME_W / 2
 
+  useEffect(() => {
+    matHRef.current = matH
+    matVRef.current = matV
+  }, [matH, matV])
+
   useFrame((_, delta) => {
     fadeRef.current = Math.min(fadeRef.current + delta / FRAME_PHOTO_FADE_IN_DURATION, 1)
-    matH.opacity = fadeRef.current
-    matV.opacity = fadeRef.current
+    if (matHRef.current) matHRef.current.opacity = fadeRef.current
+    if (matVRef.current) matVRef.current.opacity = fadeRef.current
   })
 
   return (
@@ -234,13 +242,62 @@ function FloatingPlane({ tex, aspect }: { tex: THREE.Texture; aspect: number }) 
   )
 }
 
-type GifFrame = { bitmap: ImageBitmap; duration: number }
+type GifFrame =
+  | { kind: 'bitmap'; bitmap: ImageBitmap; duration: number }
+  | { kind: 'image-data'; imageData: ImageData; duration: number }
+
+function closeGifFrames(frames: GifFrame[]) {
+  for (const frame of frames) {
+    if (frame.kind === 'bitmap') frame.bitmap.close()
+  }
+}
+
+function decodeGifWithGifuct(arrayBuffer: ArrayBuffer) {
+  const parsedGif = parseGIF(arrayBuffer)
+  const parsedFrames = decompressFrames(parsedGif, true)
+  const width = parsedGif.lsd.width
+  const height = parsedGif.lsd.height
+  const fullCanvas = document.createElement('canvas')
+  const patchCanvas = document.createElement('canvas')
+  fullCanvas.width = width
+  fullCanvas.height = height
+  const fullCtx = fullCanvas.getContext('2d')
+  const patchCtx = patchCanvas.getContext('2d')
+
+  if (!fullCtx || !patchCtx) return null
+
+  let previousFrame: ParsedFrame | null = null
+  const frames: GifFrame[] = []
+
+  for (const frame of parsedFrames) {
+    if (previousFrame?.disposalType === 2) {
+      const { left, top, width: frameWidth, height: frameHeight } = previousFrame.dims
+      fullCtx.clearRect(left, top, frameWidth, frameHeight)
+    }
+
+    const { left, top, width: frameWidth, height: frameHeight } = frame.dims
+    patchCanvas.width = frameWidth
+    patchCanvas.height = frameHeight
+    const patchImageData = patchCtx.createImageData(frameWidth, frameHeight)
+    patchImageData.data.set(frame.patch)
+    patchCtx.putImageData(patchImageData, 0, 0)
+    fullCtx.drawImage(patchCanvas, left, top)
+
+    frames.push({
+      kind: 'image-data',
+      imageData: fullCtx.getImageData(0, 0, width, height),
+      duration: Math.max(frame.delay || 100, 20),
+    })
+    previousFrame = frame
+  }
+
+  return { frames, width, height }
+}
 
 /**
  * Renders a photo URL onto the floating plane. GIFs are decoded frame-by-frame
- * and animated by repainting a CanvasTexture each tick — a plain WebGL texture
- * only ever shows a GIF's first frame. Static images (or browsers without
- * `ImageDecoder`) fall back to a single painted frame.
+ * and animated by repainting a CanvasTexture each tick. `ImageDecoder` is used
+ * first when available, with `gifuct-js` as a fallback for mobile browsers.
  */
 function UrlImage({ url }: { url: string }) {
   // One offscreen canvas drives a CanvasTexture. We only build the texture
@@ -259,15 +316,13 @@ function UrlImage({ url }: { url: string }) {
 
   useEffect(() => {
     let cancelled = false
+    frameIndexRef.current = 0
+    elapsedRef.current = 0
     const canvas = document.createElement('canvas')
     canvasRef.current = canvas
     const ctx = canvas.getContext('2d')
 
-    const present = (source: CanvasImageSource, w: number, h: number) => {
-      if (!ctx) return
-      canvas.width = w
-      canvas.height = h
-      ctx.drawImage(source, 0, 0, w, h)
+    const presentTexture = (w: number, h: number) => {
       const tex = new THREE.CanvasTexture(canvas)
       tex.colorSpace = THREE.SRGBColorSpace
       textureRef.current = tex
@@ -275,33 +330,75 @@ function UrlImage({ url }: { url: string }) {
       setTexture(tex)
     }
 
+    const present = (source: CanvasImageSource, w: number, h: number) => {
+      if (!ctx) return
+      canvas.width = w
+      canvas.height = h
+      ctx.drawImage(source, 0, 0, w, h)
+      presentTexture(w, h)
+    }
+
+    const presentImageData = (imageData: ImageData, w: number, h: number) => {
+      if (!ctx) return
+      canvas.width = w
+      canvas.height = h
+      ctx.putImageData(imageData, 0, 0)
+      presentTexture(w, h)
+    }
+
     const load = async () => {
       try {
         const res = await fetch(url)
         const blob = await res.blob()
+        const isGif = blob.type === 'image/gif' || url.toLowerCase().includes('.gif')
 
-        if (blob.type === 'image/gif' && typeof ImageDecoder !== 'undefined') {
-          const decoder = new ImageDecoder({
-            data: await blob.arrayBuffer(),
-            type: blob.type,
-          })
-          await decoder.tracks.ready
-          const count = decoder.tracks.selectedTrack?.frameCount ?? 1
-          const frames: GifFrame[] = []
-          for (let i = 0; i < count; i++) {
-            const { image } = await decoder.decode({ frameIndex: i })
-            const bitmap = await createImageBitmap(image)
-            // VideoFrame.duration is in microseconds; default to 100ms.
-            frames.push({ bitmap, duration: (image.duration ?? 100_000) / 1000 })
-            image.close()
+        if (isGif) {
+          const arrayBuffer = await blob.arrayBuffer()
+
+          if (typeof ImageDecoder !== 'undefined') {
+            try {
+              const decoder = new ImageDecoder({
+                data: arrayBuffer.slice(0),
+                type: blob.type || 'image/gif',
+              })
+              await decoder.tracks.ready
+              const count = decoder.tracks.selectedTrack?.frameCount ?? 1
+              const frames: GifFrame[] = []
+              for (let i = 0; i < count; i++) {
+                const { image } = await decoder.decode({ frameIndex: i })
+                const bitmap = await createImageBitmap(image)
+                frames.push({
+                  kind: 'bitmap',
+                  bitmap,
+                  duration: (image.duration ?? 100_000) / 1000,
+                })
+                image.close()
+              }
+              if (cancelled) {
+                closeGifFrames(frames)
+                return
+              }
+              framesRef.current = frames
+              const first = frames[0]
+              if (first?.kind === 'bitmap') {
+                present(first.bitmap, first.bitmap.width, first.bitmap.height)
+                return
+              }
+            } catch {
+              // Fall through to gifuct-js for browsers with incomplete GIF decoding.
+            }
           }
+
+          const decodedGif = decodeGifWithGifuct(arrayBuffer)
+          if (!decodedGif) return
           if (cancelled) {
-            for (const f of frames) f.bitmap.close()
             return
           }
-          framesRef.current = frames
-          const first = frames[0].bitmap
-          present(first, first.width, first.height)
+          framesRef.current = decodedGif.frames
+          const first = decodedGif.frames[0]
+          if (first?.kind === 'image-data') {
+            presentImageData(first.imageData, decodedGif.width, decodedGif.height)
+          }
           return
         }
 
@@ -321,7 +418,7 @@ function UrlImage({ url }: { url: string }) {
 
     return () => {
       cancelled = true
-      for (const f of framesRef.current) f.bitmap.close()
+      closeGifFrames(framesRef.current)
       framesRef.current = []
       textureRef.current?.dispose()
       textureRef.current = null
@@ -343,7 +440,11 @@ function UrlImage({ url }: { url: string }) {
       frameIndexRef.current = (frameIndexRef.current + 1) % frames.length
       current = frames[frameIndexRef.current]
     }
-    ctx.drawImage(current.bitmap, 0, 0, canvas.width, canvas.height)
+    if (current.kind === 'bitmap') {
+      ctx.drawImage(current.bitmap, 0, 0, canvas.width, canvas.height)
+    } else {
+      ctx.putImageData(current.imageData, 0, 0)
+    }
     tex.needsUpdate = true
   })
 
