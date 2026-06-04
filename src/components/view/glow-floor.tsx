@@ -74,9 +74,10 @@ const floorFragment = /* glsl */ `
   }
 `;
 
-export function GlowFloor() {
+export function GlowFloor({ opacity = 1 }: { opacity?: number }) {
   const tex = useTexture("/assets/finding-keypers-pattern.png");
   const matRef = useRef<THREE.ShaderMaterial>(null);
+  const fadeRef = useRef(0);
 
   const texture = useMemo(() => {
     const configuredTexture = tex.clone();
@@ -103,8 +104,9 @@ export function GlowFloor() {
     if (!matRef.current) return;
 
     const { uniforms } = matRef.current;
+    fadeRef.current = Math.min(fadeRef.current + delta / 3.5, 1);
     uniforms.uTime.value += delta;
-    uniforms.uFade.value = Math.min(uniforms.uFade.value + delta / 3.5, 1);
+    uniforms.uFade.value = fadeRef.current * opacity;
   });
 
   return (

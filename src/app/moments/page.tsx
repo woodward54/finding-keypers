@@ -49,9 +49,7 @@ export default function MomentsPage() {
 
         <section className='mx-auto max-w-6xl px-4 pb-16 sm:px-6'>
           {!ready ? (
-            <p className='text-gilded font-display animate-pulse text-center text-sm tracking-[0.4em] uppercase'>
-              Unlocking…
-            </p>
+            <></>
           ) : mine.length === 0 ? (
             <div className='mx-auto flex max-w-md flex-col items-center gap-5 py-12 text-center'>
               <p className='text-muted-foreground text-sm leading-relaxed'>

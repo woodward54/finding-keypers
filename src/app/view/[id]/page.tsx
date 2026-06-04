@@ -2,7 +2,7 @@
 
 import type { MomentPhoto } from '@/lib/placeholder-photos'
 import { useMomentPhotos } from '@/lib/use-moment-photos'
-import { ArrowDown, ArrowLeft, DownloadIcon } from 'lucide-react'
+import { ArrowLeft, DownloadIcon } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -13,13 +13,7 @@ const PhotoScene = dynamic(
   () => import('@/components/view/photo-scene').then((m) => m.PhotoScene),
   {
     ssr: false,
-    loading: () => (
-      <div className='flex h-full w-full items-center justify-center bg-black'>
-        <p className='font-display text-gilded animate-pulse text-sm tracking-[0.4em] uppercase'>
-          Unlocking…
-        </p>
-      </div>
-    ),
+    loading: () => <div className='flex h-full w-full items-center justify-center bg-black'></div>,
   }
 )
 
@@ -93,7 +87,7 @@ export default function ViewPage() {
       ) : (
         <div className='flex h-full w-full items-center justify-center'>
           <p className='font-display text-gilded animate-pulse text-sm tracking-[0.4em] uppercase'>
-            {isLoading ? 'Unlocking…' : 'Keyper not found'}
+            {isLoading ? '' : 'Keyper not found'}
           </p>
         </div>
       )}

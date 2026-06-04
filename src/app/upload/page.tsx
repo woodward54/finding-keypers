@@ -293,6 +293,9 @@ export default function UploadPage() {
   const [name, setName] = useState('')
   const [countdown, setCountdown] = useState<number | null>(null)
   const [flash, setFlash] = useState(false)
+  // Once the final shot is captured, fade the whole page to black through
+  // encoding/upload and on into the view page.
+  const [fadeToBlack, setFadeToBlack] = useState(false)
 
   const generateUploadUrl = useMutation(api.photos.generateUploadUrl)
   const savePhoto = useMutation(api.photos.savePhoto)
@@ -331,6 +334,7 @@ export default function UploadPage() {
         posthog.captureException(err)
         posthog.capture('upload_error')
         setError('Something went wrong while sealing your portraits. Try again.')
+        setFadeToBlack(false)
         setStage('error')
       }
     },
@@ -489,19 +493,28 @@ export default function UploadPage() {
       return
     }
 
+    // The final shot is in the can — start fading the page to black.
+    setFadeToBlack(true)
     setStage('encoding')
     // Yield so the "developing" state can paint before the encode blocks.
     await sleep(50)
     // The frame caption is painted on canvas, which needs the font preloaded.
     await ensureFooterFont()
-    const gifBlob = encodeGif(frames)
-    posthog.capture('photo_captured', {
-      frame_count: frames.length,
-      has_name: name.trim().length > 0,
-    })
-    setPreview(URL.createObjectURL(gifBlob))
-    stopStream()
-    await uploadGif(gifBlob)
+    try {
+      const gifBlob = encodeGif(frames)
+      posthog.capture('photo_captured', {
+        frame_count: frames.length,
+        has_name: name.trim().length > 0,
+      })
+      setPreview(URL.createObjectURL(gifBlob))
+      stopStream()
+      await uploadGif(gifBlob)
+    } catch (err) {
+      posthog.captureException(err)
+      setError('We couldn’t develop your portraits. Try again.')
+      setFadeToBlack(false)
+      setStage('error')
+    }
   }, [captureFrame, encodeGif, name, stopStream, uploadGif])
 
   const retake = useCallback(() => {
@@ -511,6 +524,7 @@ export default function UploadPage() {
     setError(null)
     setCountdown(null)
     setFlash(false)
+    setFadeToBlack(false)
     setStage('starting')
     startCamera()
   }, [preview, startCamera])
@@ -651,6 +665,14 @@ export default function UploadPage() {
           )}
         </div>
       </main>
+
+      {/* Fade to black after the final shot, holding through encoding, upload,
+          and the navigation into the view page. */}
+      <div
+        className={`fixed inset-0 z-50 bg-black transition-opacity duration-1000 ease-in ${
+          fadeToBlack ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { Environment, Html, Lightformer, OrbitControls, PerspectiveCamera } from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { Suspense, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { FadingSparkles } from '../view/fading-sparkles'
@@ -23,11 +23,11 @@ type Block = {
   delay?: number // beat of black before this block fades in (ms)
 }
 
-const DEFAULT_FADE_IN = 1200
+const DEFAULT_FADE_IN = 800
 const DEFAULT_FADE_OUT = 1800
 
 const BLOCKS: Block[] = [
-  { lines: ['Welcome, explorers.'], hold: 4000, delay: 4500 },
+  { lines: ['Welcome, explorers.'], hold: 3000, delay: 3000 },
   {
     lines: [
       'Among thousands of paths,',
@@ -39,7 +39,7 @@ const BLOCKS: Block[] = [
     hold: 6800,
   },
   {
-    lines: ['But not all treasures are meant', 'to stay hidden forever.'],
+    lines: ['But not all treasures', 'are meant to be hidden forever.'],
     hold: 4000,
   },
   {
@@ -75,6 +75,8 @@ const BLOCKS: Block[] = [
   },
 ]
 
+const LAST_BLOCK_INDEX = BLOCKS.length - 1
+const FINAL_SCENE_FADE_OUT = BLOCKS[LAST_BLOCK_INDEX]?.fadeOut ?? DEFAULT_FADE_OUT
 const REVEAL_DURATION = 1900 // initial fade in from black
 const BLACKOUT_DURATION = 2400 // final fade to black before redirect
 const MANUAL_FADE = 700 // snappier cross-fade used when navigating via keyboard
@@ -85,7 +87,13 @@ const MAX_DISPERSE = 64
 
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2)
 
-function Narration({ onComplete }: { onComplete: () => void }) {
+function Narration({
+  onComplete,
+  onSceneFadeOut,
+}: {
+  onComplete: () => void
+  onSceneFadeOut: () => void
+}) {
   // step: -1 = initial blackout, 0..N-1 = blocks, N = final blackout
   const [step, setStep] = useState(-1)
   const [shown, setShown] = useState(false)
@@ -132,7 +140,15 @@ function Narration({ onComplete }: { onComplete: () => void }) {
     navRef.current = false
 
     const showAt = setTimeout(() => setShown(true), delay)
-    const hideAt = setTimeout(() => setShown(false), delay + fadeIn + block.hold)
+    const hideAt = setTimeout(
+      () => {
+        setShown(false)
+        if (step === LAST_BLOCK_INDEX) {
+          onSceneFadeOut()
+        }
+      },
+      delay + fadeIn + block.hold
+    )
     const nextAt = setTimeout(() => setStep((s) => s + 1), delay + fadeIn + block.hold + fadeOut)
 
     return () => {
@@ -140,7 +156,7 @@ function Narration({ onComplete }: { onComplete: () => void }) {
       clearTimeout(hideAt)
       clearTimeout(nextAt)
     }
-  }, [step, onComplete])
+  }, [step, onComplete, onSceneFadeOut])
 
   const block = step >= 0 && step < BLOCKS.length ? BLOCKS[step] : null
   const fadeIn = block?.fadeIn ?? DEFAULT_FADE_IN
@@ -355,7 +371,40 @@ function Narration({ onComplete }: { onComplete: () => void }) {
   )
 }
 
+function useSceneOpacity(visible: boolean, durationMs: number) {
+  const [opacity, setOpacity] = useState(1)
+  const opacityRef = useRef(1)
+  const animationRef = useRef<{ from: number; target: number; elapsed: number } | null>(null)
+
+  useEffect(() => {
+    const target = visible ? 1 : 0
+    if (opacityRef.current === target) return
+    animationRef.current = { from: opacityRef.current, target, elapsed: 0 }
+  }, [visible])
+
+  useFrame((_, delta) => {
+    const animation = animationRef.current
+    if (!animation) return
+
+    animation.elapsed += delta * 1000
+    const t = Math.min(1, animation.elapsed / durationMs)
+    const value = animation.from + (animation.target - animation.from) * easeInOut(t)
+    opacityRef.current = value
+    setOpacity(value)
+
+    if (t === 1) {
+      animationRef.current = null
+    }
+  })
+
+  return opacity
+}
+
 function SceneContents({ onComplete }: { onComplete: () => void }) {
+  const [sceneVisible, setSceneVisible] = useState(true)
+  const sceneOpacity = useSceneOpacity(sceneVisible, FINAL_SCENE_FADE_OUT)
+  const handleSceneFadeOut = useCallback(() => setSceneVisible(false), [])
+
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 3, 8]} fov={45} />
@@ -374,23 +423,44 @@ function SceneContents({ onComplete }: { onComplete: () => void }) {
       <fog attach='fog' args={['#000000', 5, 190]} />
 
       {/* Lighting (floor + particles are self-lit; kept for parity with /view) */}
-      <ambientLight intensity={0.35} color={'#ffdca0'} />
-      <pointLight position={[2.5, 4, 4]} intensity={32} color={'#ffcf8f'} distance={22} decay={2} />
+      <ambientLight intensity={0.35 * sceneOpacity} color={'#ffdca0'} />
+      <pointLight
+        position={[2.5, 4, 4]}
+        intensity={32 * sceneOpacity}
+        color={'#ffcf8f'}
+        distance={22}
+        decay={2}
+      />
       <pointLight
         position={[-3, 2, 2.5]}
-        intensity={14}
+        intensity={14 * sceneOpacity}
         color={'#ffe6bf'}
         distance={16}
         decay={2}
       />
       <Environment resolution={64} frames={1}>
-        <Lightformer intensity={2} color={'#ffe6bf'} position={[0, 4, 4]} scale={[6, 6, 1]} />
-        <Lightformer intensity={1.2} color={'#ffd79a'} position={[-4, 2, 2]} scale={[3, 5, 1]} />
-        <Lightformer intensity={1.2} color={'#ffd79a'} position={[4, 2, 2]} scale={[3, 5, 1]} />
+        <Lightformer
+          intensity={2 * sceneOpacity}
+          color={'#ffe6bf'}
+          position={[0, 4, 4]}
+          scale={[6, 6, 1]}
+        />
+        <Lightformer
+          intensity={1.2 * sceneOpacity}
+          color={'#ffd79a'}
+          position={[-4, 2, 2]}
+          scale={[3, 5, 1]}
+        />
+        <Lightformer
+          intensity={1.2 * sceneOpacity}
+          color={'#ffd79a'}
+          position={[4, 2, 2]}
+          scale={[3, 5, 1]}
+        />
       </Environment>
 
       <Suspense fallback={null}>
-        <GlowFloor />
+        <GlowFloor opacity={sceneOpacity} />
       </Suspense>
 
       {/* Light particles drifting through the hall */}
@@ -400,7 +470,7 @@ function SceneContents({ onComplete }: { onComplete: () => void }) {
         position={[0, 3, 0]}
         size={1.6}
         speed={0.25}
-        opacity={0.5}
+        opacity={0.5 * sceneOpacity}
         color={'#ffd79a'}
         noise={1.3}
       />
@@ -414,12 +484,12 @@ function SceneContents({ onComplete }: { onComplete: () => void }) {
         zIndexRange={[20, 10]}
         calculatePosition={(_el, _camera, size) => [size.width / 2, size.height / 2]}
       >
-        <Narration onComplete={onComplete} />
+        <Narration onComplete={onComplete} onSceneFadeOut={handleSceneFadeOut} />
       </Html>
 
       <EffectComposer>
         <Bloom
-          intensity={0.7}
+          intensity={0.7 * sceneOpacity}
           luminanceThreshold={0.55}
           luminanceSmoothing={0.3}
           mipmapBlur

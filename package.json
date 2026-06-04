@@ -9,7 +9,7 @@
     "dev": "npm-run-all --parallel dev:frontend dev:backend",
     "dashboard": "convex dashboard",
     "dev:frontend": "next dev -p 3024",
-    "dev:backend": "convex dev --local",
+    "dev:backend": "convex dev",
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "convex:deploy": "convex deploy"
