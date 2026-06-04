@@ -60,7 +60,7 @@ function DownloadButton({ photo }: { photo: MomentPhoto }) {
       onClick={handleDownload}
       disabled={busy}
       aria-label='Download'
-      className='group border-bronze/40 text-gold hover:border-gold absolute top-5 right-5 z-10 flex items-center gap-2 rounded-md border bg-black/40 px-3 py-2 text-xs tracking-[0.2em] uppercase backdrop-blur-sm transition-colors disabled:opacity-50'
+      className='group border-bronze/40 text-gold hover:border-gold absolute top-5 right-5 z-10 flex items-center gap-2 rounded-md border bg-black/40 px-3 py-2 text-xs tracking-[0.2em] uppercase backdrop-blur-sm transition-all disabled:pointer-events-none disabled:opacity-50'
     >
       <DownloadIcon className='size-4 transition-transform group-hover:scale-110' />
       {busy ? 'Saving…' : 'Download'}
@@ -95,7 +95,7 @@ export default function ViewPage() {
       {/* Overlay chrome */}
       <Link
         href='/'
-        className='group border-bronze/40 text-gold hover:border-gold absolute top-5 left-5 z-10 flex items-center gap-2 rounded-md border bg-black/40 px-3 py-2 text-xs tracking-[0.2em] uppercase backdrop-blur-sm transition-colors'
+        className='group border-bronze/40 text-gold hover:border-gold absolute top-5 left-5 z-10 flex items-center gap-2 rounded-md border bg-black/40 px-3 py-2 text-xs tracking-[0.2em] uppercase backdrop-blur-sm transition-all'
       >
         <ArrowLeft className='size-4 transition-transform group-hover:-translate-x-0.5' />
         Gallery

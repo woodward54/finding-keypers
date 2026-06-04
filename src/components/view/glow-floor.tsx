@@ -75,7 +75,7 @@ const floorFragment = /* glsl */ `
 `;
 
 export function GlowFloor({ opacity = 1 }: { opacity?: number }) {
-  const tex = useTexture("/assets/finding-keypers-pattern.png");
+  const tex = useTexture("/assets/finding-keypers-pattern.webp");
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const fadeRef = useRef(0);
 

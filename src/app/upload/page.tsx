@@ -454,7 +454,10 @@ export default function UploadPage() {
       photoCtx.putImageData(frame, 0, 0)
       drawArtDecoFrame(outCtx, photoCanvas)
       const composited = outCtx.getImageData(0, 0, OUT_WIDTH, OUT_HEIGHT)
-      const palette = quantize(composited.data, 256)
+      // 128-colour palette: keeps the sepia/gold look near-identical to a full
+      // 256 ramp while roughly halving the encoded gif size for low-bandwidth
+      // gallery loads.
+      const palette = quantize(composited.data, 128)
       const index = applyPalette(composited.data, palette)
       encoder.writeFrame(index, OUT_WIDTH, OUT_HEIGHT, { palette, delay: FRAME_DELAY_MS })
     }
@@ -535,7 +538,7 @@ export default function UploadPage() {
       <div
         className='pointer-events-none fixed inset-0 -z-20 bg-repeat opacity-40'
         style={{
-          backgroundImage: "url('/assets/finding-keypers-pattern.png')",
+          backgroundImage: "url('/assets/finding-keypers-pattern.webp')",
           backgroundSize: '520px',
         }}
       />

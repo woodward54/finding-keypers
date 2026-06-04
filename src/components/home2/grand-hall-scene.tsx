@@ -30,7 +30,7 @@ function Rig() {
 
 /* ------------------------------- Floor -------------------------------- */
 function Floor() {
-  const base = useTexture("/assets/finding-keypers-pattern.png");
+  const base = useTexture("/assets/finding-keypers-pattern.webp");
 
   // One image, two configured copies: a colour map and a linear depth/distortion
   // map that perturbs the reflections so the inlays read with relief.

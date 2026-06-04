@@ -10,7 +10,7 @@ export default function Home() {
       <div
         className='pointer-events-none fixed inset-0 -z-20 bg-repeat opacity-40'
         style={{
-          backgroundImage: "url('/assets/finding-keypers-pattern.png')",
+          backgroundImage: "url('/assets/finding-keypers-pattern.webp')",
           backgroundSize: '520px',
         }}
       />

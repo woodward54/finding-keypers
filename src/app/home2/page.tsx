@@ -26,7 +26,7 @@ export default function Home2Page() {
       {/* Overlay chrome */}
       <Link
         href="/"
-        className="group absolute left-5 top-5 z-10 flex items-center gap-2 rounded-md border border-bronze/40 bg-black/40 px-3 py-2 text-xs uppercase tracking-[0.2em] text-gold backdrop-blur-sm transition-colors hover:border-gold"
+        className="group absolute left-5 top-5 z-10 flex items-center gap-2 rounded-md border border-bronze/40 bg-black/40 px-3 py-2 text-xs uppercase tracking-[0.2em] text-gold backdrop-blur-sm transition-all active:scale-95 hover:border-gold"
       >
         <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" />
         Vault

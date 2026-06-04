@@ -69,7 +69,7 @@ const BLOCKS: Block[] = [
     hold: 6000,
   },
   {
-    image: { src: '/assets/finding-keypers-icon.png' },
+    image: { src: '/assets/finding-keypers-icon.webp' },
     hold: 2000,
     fadeOut: 5200,
   },

@@ -8,12 +8,11 @@ export function SiteHeader() {
       <div className='mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6'>
         <Link href='/' className='group flex items-center gap-3'>
           <Image
-            src='/assets/finding-keypers-icon.png'
+            src='/assets/finding-keypers-icon.webp'
             alt='Finding Keypers'
             width={48}
             height={48}
             priority
-            unoptimized
             className='hidden size-11 zoom-105 rounded-md object-cover transition-transform duration-500 group-hover:scale-105 sm:flex'
           />
           <div className='leading-none'>
@@ -33,11 +32,10 @@ export function SiteHeader() {
         >
           <Link href='/upload' aria-label='Add your portrait'>
             <Image
-              src='/assets/finding-keypers-icon-camera.png?v=transparent'
+              src='/assets/finding-keypers-icon-camera.webp'
               alt=''
               width={44}
               height={44}
-              unoptimized
               className='h-auto w-11 object-contain transition-transform duration-300 group-hover:scale-110'
             />
           </Link>
