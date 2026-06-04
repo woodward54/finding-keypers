@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { useMutation } from 'convex/react'
+import posthog from 'posthog-js'
 import { applyPalette, GIFEncoder, quantize } from 'gifenc'
 import { ArrowLeft, Camera, Loader2, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
@@ -324,8 +325,11 @@ export default function UploadPage() {
         const newId = await savePhoto({ storageId, name: name.trim() || undefined })
         // Keep a local record so this explorer can revisit their own moments.
         rememberMoment(newId)
+        posthog.capture('photo_uploaded', { photo_id: newId, has_name: name.trim().length > 0 })
         router.push(`/view/${encodeURIComponent(newId)}`)
-      } catch {
+      } catch (err) {
+        posthog.captureException(err)
+        posthog.capture('upload_error')
         setError('Something went wrong while sealing your portraits. Try again.')
         setStage('error')
       }
@@ -346,6 +350,7 @@ export default function UploadPage() {
       }
       setStage('live')
     } catch {
+      posthog.capture('camera_error')
       setError(
         "We couldn't open your camera. Please grant permission, or use a device with a camera."
       )
@@ -377,6 +382,7 @@ export default function UploadPage() {
         setStage('live')
       } catch {
         if (cancelled) return
+        posthog.capture('camera_error')
         setError(
           "We couldn't open your camera. Please grant permission, or use a device with a camera."
         )
@@ -489,12 +495,17 @@ export default function UploadPage() {
     // The frame caption is painted on canvas, which needs the font preloaded.
     await ensureFooterFont()
     const gifBlob = encodeGif(frames)
+    posthog.capture('photo_captured', {
+      frame_count: frames.length,
+      has_name: name.trim().length > 0,
+    })
     setPreview(URL.createObjectURL(gifBlob))
     stopStream()
     await uploadGif(gifBlob)
-  }, [captureFrame, encodeGif, stopStream, uploadGif])
+  }, [captureFrame, encodeGif, name, stopStream, uploadGif])
 
   const retake = useCallback(() => {
+    posthog.capture('capture_retried')
     if (preview) URL.revokeObjectURL(preview)
     setPreview(null)
     setError(null)

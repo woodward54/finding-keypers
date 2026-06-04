@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
+import posthog from 'posthog-js'
 import { useCallback, useSyncExternalStore } from 'react'
 
 const noopSubscribe = () => () => {}
@@ -27,6 +28,7 @@ export default function IntroPage() {
   )
 
   const handleComplete = useCallback(() => {
+    posthog.capture('intro_completed')
     router.replace('/upload')
   }, [router])
 

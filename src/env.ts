@@ -9,6 +9,8 @@ export const env = createEnv({
    */
   client: {
     NEXT_PUBLIC_CONVEX_URL: z.url(),
+    NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: z.string().optional(),
+    NEXT_PUBLIC_POSTHOG_HOST: z.string(),
   },
 
   /**
@@ -17,6 +19,8 @@ export const env = createEnv({
    */
   runtimeEnv: {
     NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL,
+    NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN,
+    NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
   },
 
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,

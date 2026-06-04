@@ -6,7 +6,8 @@ import { ArrowDown, ArrowLeft, DownloadIcon } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useState } from 'react'
+import posthog from 'posthog-js'
+import { useEffect, useState } from 'react'
 
 const PhotoScene = dynamic(
   () => import('@/components/view/photo-scene').then((m) => m.PhotoScene),
@@ -38,6 +39,7 @@ function DownloadButton({ photo }: { photo: MomentPhoto }) {
   const handleDownload = async () => {
     if (busy) return
     setBusy(true)
+    posthog.capture('photo_download_clicked', { photo_id: photo.id, photo_name: photo.name })
     try {
       const res = await fetch(url)
       const blob = await res.blob()
@@ -77,6 +79,12 @@ export default function ViewPage() {
   const id = decodeURIComponent(params.id)
   const { photos, isLoading } = useMomentPhotos()
   const photo = photos.find((p) => p.id === id)
+
+  useEffect(() => {
+    if (!photo) return
+    posthog.capture('photo_viewed', { photo_id: photo.id, photo_name: photo.name })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photo?.id])
 
   return (
     <main className='fixed inset-0 overflow-hidden bg-black'>
