@@ -1,4 +1,12 @@
+packages:
+  - '.'
+
 allowBuilds:
-  esbuild: set this to true or false
-  sharp: set this to true or false
-  unrs-resolver: set this to true or false
+  '@clerk/shared': true
+  core-js: true
+  esbuild: true
+  msw: false
+  sharp: true
+  unrs-resolver: true
+
+minimumReleaseAge: 1440
