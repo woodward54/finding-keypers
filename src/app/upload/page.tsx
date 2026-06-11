@@ -14,6 +14,8 @@ import { useMyMoments } from '@/lib/use-my-moments'
 
 const FRAME_COUNT = 3
 const COUNTDOWN_SECONDS = 3
+// Each countdown tick runs 20% faster than a real second to keep the booth snappy.
+const COUNTDOWN_TICK_MS = 800
 const FRAME_DELAY_MS = 500 // playback speed of each frame in the animation
 // Quality (0–1) handed to canvas.toBlob when encoding each still WebP frame.
 const WEBP_QUALITY = 0.82
@@ -467,7 +469,7 @@ export default function UploadPage() {
       // 3… 2… 1… countdown before each shot.
       for (let c = COUNTDOWN_SECONDS; c > 0; c--) {
         setCountdown(c)
-        await sleep(1000)
+        await sleep(COUNTDOWN_TICK_MS)
       }
       setCountdown(null)
 
