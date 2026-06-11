@@ -36,16 +36,17 @@ const BLOCKS: Block[] = [
       'Through curiosity, Anjuna',
       'and unlocking this hidden box.',
     ],
-    hold: 6800,
+    hold: 6500,
   },
   {
-    lines: ['But not all treasures', 'are meant to be hidden forever.'],
-    hold: 4000,
-  },
-  {
-    lines: ["They're meant to be shared."],
-    hold: 2890,
-    fadeOut: 4000,
+    lines: [
+      'But not all treasures',
+      'are meant to be hidden forever.',
+      '',
+      "They're meant to be shared.",
+    ],
+    hold: 5000,
+    fadeOut: 3000,
   },
   {
     lines: [
@@ -56,9 +57,9 @@ const BLOCKS: Block[] = [
       'Leave this world a little',
       'more connected than you found it.',
     ],
-    hold: 6000,
+    hold: 5000,
   },
-  { lines: ['But first…'], hold: 2000 },
+  { lines: ['But first…'], hold: 1500 },
   {
     lines: [
       'Capture the moment.',
@@ -66,11 +67,11 @@ const BLOCKS: Block[] = [
       "you'll remember when",
       'two worlds briefly became one…',
     ],
-    hold: 6000,
+    hold: 5500,
   },
   {
     image: { src: '/assets/finding-keypers-icon.webp' },
-    hold: 2000,
+    hold: 1000,
     fadeOut: 5200,
   },
 ]
