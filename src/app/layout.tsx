@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cinzel, Jost } from "next/font/google";
 import "./globals.css";
 import { ConvexClientProvider } from "@/components/convex-provider";
@@ -20,6 +20,15 @@ const jost = Jost({
   subsets: ["latin"],
   preload: false,
 });
+
+// maximumScale: 1 is what actually blocks pinch zoom on iOS Safari, which
+// ignores userScalable: false on its own.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export const metadata: Metadata = {
   title: "Finding Keypers",

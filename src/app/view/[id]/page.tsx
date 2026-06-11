@@ -117,11 +117,10 @@ function DeleteButton({ photo }: { photo: MomentPhoto }) {
       <DialogContent className='border-bronze/40 bg-card'>
         <DialogHeader>
           <DialogTitle className='font-display text-gold tracking-[0.2em] uppercase'>
-            Delete this keyper?
+            Erase this moment?
           </DialogTitle>
           <DialogDescription>
-            “{photo.name}” will be gone for good — the portrait and its image are permanently
-            removed.
+            This memory will be lost to time...
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
