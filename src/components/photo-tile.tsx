@@ -1,7 +1,6 @@
 'use client'
 
-import { DecoPortrait } from '@/components/deco-art'
-import type { MomentPhoto } from '@/lib/placeholder-photos'
+import type { MomentPhoto } from '@/lib/use-moment-photos'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -11,10 +10,9 @@ import { useEffect, useState } from 'react'
 const ENTRANCE_MAX_DELAY_MS = 700
 
 export function PhotoTile({ photo, className }: { photo: MomentPhoto; className?: string }) {
-  // Photo tiles show the generated deco placeholder immediately and fade the
-  // animated WebP in once it has downloaded, so every tile (in every column)
-  // appears at once and the real frames stream in progressively rather than
-  // column-by-column.
+  // Photo tiles fade the image in over the dark card once it has downloaded,
+  // so every tile (in every column) appears at once and the real frames
+  // stream in progressively rather than column-by-column.
   const [loaded, setLoaded] = useState(false)
   // Staggered entrance: hidden on mount, revealed after a per-tile random delay.
   const [entered, setEntered] = useState(false)
@@ -36,19 +34,10 @@ export function PhotoTile({ photo, className }: { photo: MomentPhoto; className?
         className
       )}
     >
-      {/* Image / generated portrait */}
+      {/* Image */}
       <div className='aspect-[3/4] w-full overflow-hidden'>
-        {photo.url ? (
+        {photo.url && (
           <div className='relative h-full w-full transition-transform duration-700 ease-out group-hover:scale-105'>
-            {/* Instant placeholder, kept mounted under the image until it loads. */}
-            <div
-              className={cn(
-                'absolute inset-0 transition-opacity duration-700',
-                loaded ? 'opacity-0' : 'opacity-100'
-              )}
-            >
-              <DecoPortrait seed={photo.seed} />
-            </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={photo.url}
@@ -59,10 +48,6 @@ export function PhotoTile({ photo, className }: { photo: MomentPhoto; className?
                 loaded ? 'opacity-100' : 'opacity-0'
               )}
             />
-          </div>
-        ) : (
-          <div className='h-full w-full transition-transform duration-700 ease-out group-hover:scale-105'>
-            <DecoPortrait seed={photo.seed} />
           </div>
         )}
       </div>

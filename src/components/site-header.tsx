@@ -12,7 +12,7 @@ export function SiteHeader() {
             alt='Finding Keypers'
             width={48}
             height={48}
-            priority
+            loading='eager'
             className='hidden size-11 zoom-105 rounded-md object-cover transition-transform duration-500 group-hover:scale-105 sm:flex'
           />
           <div className='leading-none'>
@@ -36,6 +36,7 @@ export function SiteHeader() {
               alt=''
               width={44}
               height={44}
+              loading='eager'
               className='h-auto w-11 object-contain transition-transform duration-300 group-hover:scale-110'
             />
           </Link>

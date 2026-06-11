@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PhotoTile } from "@/components/photo-tile";
-import { type MomentPhoto } from "@/lib/placeholder-photos";
-import { useMomentPhotos } from "@/lib/use-moment-photos";
+import { useMomentPhotos, type MomentPhoto } from "@/lib/use-moment-photos";
 
 // Base per-column scroll durations (seconds), tuned for the 4-column desktop
 // layout. Each column scrolls at a slightly different pace for a layered

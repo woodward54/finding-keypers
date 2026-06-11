@@ -23,6 +23,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "^1.40.0",
+    "gifenc": "^1.0.3",
     "gifuct-js": "^2.1.2",
     "lucide-react": "^1.17.0",
     "next": "16.2.6",

@@ -1,6 +1,6 @@
 'use client'
 
-import type { MomentPhoto } from '@/lib/placeholder-photos'
+import type { MomentPhoto } from '@/lib/use-moment-photos'
 import { useMomentPhotos } from '@/lib/use-moment-photos'
 import { ArrowLeft, DownloadIcon } from 'lucide-react'
 import dynamic from 'next/dynamic'
@@ -112,9 +112,6 @@ export default function ViewPage() {
             </span>
             <span className='bg-bronze/70 h-px w-8' />
           </div>
-          {/* <p className="mt-2 text-[10px] uppercase tracking-[0.4em] text-bronze/70">
-            Drag to orbit
-          </p> */}
         </div>
       )}
     </main>

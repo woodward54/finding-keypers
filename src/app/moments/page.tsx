@@ -5,8 +5,7 @@ import Link from 'next/link'
 import { PhotoTile } from '@/components/photo-tile'
 import { SiteHeader } from '@/components/site-header'
 import { Button } from '@/components/ui/button'
-import type { MomentPhoto } from '@/lib/placeholder-photos'
-import { useMomentPhotos } from '@/lib/use-moment-photos'
+import { useMomentPhotos, type MomentPhoto } from '@/lib/use-moment-photos'
 import { useMyMoments, useMyMomentsHydrated } from '@/lib/use-my-moments'
 
 export default function MomentsPage() {

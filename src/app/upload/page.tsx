@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useMutation } from 'convex/react'
 import posthog from 'posthog-js'
 import { muxAnimatedWebp, type WebpFrame } from '@/lib/animated-webp'
+import { GIFEncoder, applyPalette, quantize } from 'gifenc'
 import { ArrowLeft, Camera, Loader2, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -26,6 +27,19 @@ const OUT_WIDTH = PHOTO_WIDTH + FRAME_PAD * 2
 const OUT_HEIGHT = PHOTO_HEIGHT + FRAME_PAD * 2
 
 type Stage = 'starting' | 'live' | 'capturing' | 'encoding' | 'uploading' | 'error'
+
+// WebKit (all iOS browsers, desktop Safari) cannot *encode* WebP: toBlob
+// silently hands back a PNG instead of null, which would corrupt the animated
+// WebP mux. Probe once so those browsers take the animated GIF path instead.
+let _canEncodeWebp: boolean | null = null
+const canEncodeWebp = () => {
+  if (_canEncodeWebp !== null) return _canEncodeWebp
+  const probe = document.createElement('canvas')
+  probe.width = 1
+  probe.height = 1
+  _canEncodeWebp = probe.toDataURL('image/webp').startsWith('data:image/webp')
+  return _canEncodeWebp
+}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -236,53 +250,6 @@ const drawArtDecoFrame = (ctx: CanvasRenderingContext2D, photo: CanvasImageSourc
   drawEdgeOrnament(ctx, rightX, H / 2, 'v')
 }
 
-/* --------------------------- 1920s photo filter --------------------------- */
-
-const FILTER_CONTRAST = 1.2
-const VIGNETTE_STRENGTH = 0.55
-const GRAIN_AMOUNT = 26
-// Duotone endpoints: crushed sepia shadows to a warm cream highlight.
-const SEPIA_SHADOW = [44, 28, 14]
-const SEPIA_HIGHLIGHT = [238, 222, 186]
-
-// Mutates a photo's pixels in place to evoke an aged 1920s print: a sepia
-// duotone with lifted contrast, a soft vignette, and film grain. The grain is
-// re-rolled per frame, so it flickers like real film stock.
-const applyVintageFilter = (image: ImageData) => {
-  const { data, width, height } = image
-  const cx = width / 2
-  const cy = height / 2
-  const maxDist = Math.hypot(cx, cy)
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * 4
-
-      // Luminance → contrast curve around mid-grey.
-      let lum = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114) / 255
-      lum = Math.min(1, Math.max(0, (lum - 0.5) * FILTER_CONTRAST + 0.5))
-
-      // Map the grey value across the sepia duotone.
-      let r = SEPIA_SHADOW[0] + (SEPIA_HIGHLIGHT[0] - SEPIA_SHADOW[0]) * lum
-      let g = SEPIA_SHADOW[1] + (SEPIA_HIGHLIGHT[1] - SEPIA_SHADOW[1]) * lum
-      let b = SEPIA_SHADOW[2] + (SEPIA_HIGHLIGHT[2] - SEPIA_SHADOW[2]) * lum
-
-      // Vignette: darken toward the edges.
-      const dist = Math.hypot(x - cx, y - cy) / maxDist
-      const vignette = 1 - VIGNETTE_STRENGTH * dist ** 2.2
-      r *= vignette
-      g *= vignette
-      b *= vignette
-
-      // Film grain (shared across channels keeps it monochrome).
-      const grain = (Math.random() - 0.5) * GRAIN_AMOUNT
-      data[i] = r + grain
-      data[i + 1] = g + grain
-      data[i + 2] = b + grain
-    }
-  }
-}
-
 export default function UploadPage() {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -311,15 +278,15 @@ export default function UploadPage() {
     streamRef.current = null
   }, [])
 
-  const uploadWebp = useCallback(
-    async (webpBlob: Blob) => {
+  const uploadAnimation = useCallback(
+    async (animationBlob: Blob) => {
       setStage('uploading')
       try {
         const postUrl = await generateUploadUrl()
         const res = await fetch(postUrl, {
           method: 'POST',
-          headers: { 'Content-Type': webpBlob.type },
-          body: webpBlob,
+          headers: { 'Content-Type': animationBlob.type },
+          body: animationBlob,
         })
 
         if (!res.ok) {
@@ -433,7 +400,10 @@ export default function UploadPage() {
     return ctx.getImageData(0, 0, PHOTO_WIDTH, PHOTO_HEIGHT)
   }, [])
 
-  const encodeWebp = useCallback(async (frames: ImageData[]): Promise<Blob> => {
+  // Encode the captured frames into a single looping animation: an animated
+  // WebP where the browser can encode WebP natively, otherwise (WebKit) an
+  // animated GIF — which the viewer and download already understand.
+  const encodeAnimation = useCallback(async (frames: ImageData[]): Promise<Blob> => {
     // Scratch canvas holding one raw photo frame, drawn into the framed canvas.
     const photoCanvas = document.createElement('canvas')
     photoCanvas.width = PHOTO_WIDTH
@@ -444,29 +414,46 @@ export default function UploadPage() {
     const outCanvas = document.createElement('canvas')
     outCanvas.width = OUT_WIDTH
     outCanvas.height = OUT_HEIGHT
-    const outCtx = outCanvas.getContext('2d')
+    const outCtx = outCanvas.getContext('2d', { willReadFrequently: true })
     if (!photoCtx || !outCtx) throw new Error('Could not get a drawing context')
 
+    const useWebp = canEncodeWebp()
     // Each composited frame is encoded as its own still WebP via the browser's
     // native encoder; we await one before drawing the next so the shared canvas
     // is never overwritten mid-encode. The stills are then muxed into a single
     // animated WebP.
     const webpFrames: WebpFrame[] = []
+    const gif = useWebp ? null : GIFEncoder()
+
     for (const frame of frames) {
-      // Age the photo before it goes inside the (still-golden) frame.
-      applyVintageFilter(frame)
       photoCtx.putImageData(frame, 0, 0)
       drawArtDecoFrame(outCtx, photoCanvas)
+      if (gif) {
+        const { data } = outCtx.getImageData(0, 0, OUT_WIDTH, OUT_HEIGHT)
+        const palette = quantize(data, 256)
+        const index = applyPalette(data, palette)
+        gif.writeFrame(index, OUT_WIDTH, OUT_HEIGHT, { palette, delay: FRAME_DELAY_MS })
+        continue
+      }
       const blob = await new Promise<Blob | null>((resolve) =>
         outCanvas.toBlob(resolve, 'image/webp', WEBP_QUALITY)
       )
-      if (!blob) throw new Error('This browser cannot encode WebP images')
+      // WebKit ignores the requested type and returns a PNG; guard the type so
+      // PNG bytes can never reach the WebP muxer.
+      if (!blob || blob.type !== 'image/webp') {
+        throw new Error('This browser cannot encode WebP images')
+      }
       webpFrames.push({
         data: new Uint8Array(await blob.arrayBuffer()),
         width: OUT_WIDTH,
         height: OUT_HEIGHT,
         duration: FRAME_DELAY_MS,
       })
+    }
+
+    if (gif) {
+      gif.finish()
+      return new Blob([gif.bytes() as BlobPart], { type: 'image/gif' })
     }
     return muxAnimatedWebp(webpFrames, { loop: 0 })
   }, [])
@@ -510,21 +497,22 @@ export default function UploadPage() {
     // The frame caption is painted on canvas, which needs the font preloaded.
     await ensureFooterFont()
     try {
-      const webpBlob = await encodeWebp(frames)
+      const animationBlob = await encodeAnimation(frames)
       posthog.capture('photo_captured', {
         frame_count: frames.length,
+        format: animationBlob.type,
         has_name: name.trim().length > 0,
       })
-      setPreview(URL.createObjectURL(webpBlob))
+      setPreview(URL.createObjectURL(animationBlob))
       stopStream()
-      await uploadWebp(webpBlob)
+      await uploadAnimation(animationBlob)
     } catch (err) {
       posthog.captureException(err)
       setError('We couldn’t develop your portraits. Try again.')
       setFadeToBlack(false)
       setStage('error')
     }
-  }, [captureFrame, encodeWebp, name, stopStream, uploadWebp])
+  }, [captureFrame, encodeAnimation, name, stopStream, uploadAnimation])
 
   const retake = useCallback(() => {
     posthog.capture('capture_retried')
