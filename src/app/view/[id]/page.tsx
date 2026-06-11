@@ -19,7 +19,7 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import posthog from 'posthog-js'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
 
@@ -138,26 +138,37 @@ function DeleteButton({ photo }: { photo: MomentPhoto }) {
   )
 }
 
-// Pinch zoom from a previous page survives client-side navigation (the
-// browser only re-reads the viewport meta on a full page load), which can
-// leave the fixed overlay buttons scrolled out of view. Rewriting the meta
-// content forces a re-evaluation that snaps the scale back to 1.
-function useResetZoom() {
+// Pinch zoom can't be reset programmatically on iOS Safari, and it survives
+// client-side navigation, so instead of fighting it we glue the overlay
+// chrome to the visual viewport — the portion of the page actually on
+// screen — so the buttons stay visible regardless of zoom and pan.
+function useVisualViewportPin() {
+  const ref = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
-    const scale = window.visualViewport?.scale ?? 1
-    if (scale <= 1) return
-    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]')
-    if (!meta) return
-    const content = meta.content
-    meta.content = content.replace(/maximum-scale=[\d.]+/, 'maximum-scale=1.0001')
-    requestAnimationFrame(() => {
-      meta.content = content
-    })
+    const vv = window.visualViewport
+    const el = ref.current
+    if (!vv || !el) return
+
+    const update = () => {
+      el.style.width = `${vv.width}px`
+      el.style.height = `${vv.height}px`
+      el.style.transform = `translate(${vv.offsetLeft}px, ${vv.offsetTop}px)`
+    }
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+    }
   }, [])
+
+  return ref
 }
 
 export default function ViewPage() {
-  useResetZoom()
+  const overlayRef = useVisualViewportPin()
   const params = useParams<{ id: string }>()
   const id = decodeURIComponent(params.id)
   const { photos, isLoading } = useMomentPhotos()
@@ -183,33 +194,39 @@ export default function ViewPage() {
         </div>
       )}
 
-      {/* Overlay chrome */}
-      <Link
-        href='/'
-        className='group border-bronze/40 text-gold hover:border-gold absolute top-5 left-5 z-10 flex items-center gap-2 rounded-md border bg-black/40 px-3 py-2 text-xs tracking-[0.2em] uppercase backdrop-blur-sm transition-all'
+      {/* Overlay chrome — pinned to the visual viewport so it stays on
+          screen even when the page is pinch-zoomed */}
+      <div
+        ref={overlayRef}
+        className='pointer-events-none absolute top-0 left-0 z-10 h-full w-full'
       >
-        <ArrowLeft className='size-4 transition-transform group-hover:-translate-x-0.5' />
-        Gallery
-      </Link>
+        <Link
+          href='/'
+          className='group border-bronze/40 text-gold hover:border-gold pointer-events-auto absolute top-5 left-5 flex items-center gap-2 rounded-md border bg-black/40 px-3 py-2 text-xs tracking-[0.2em] uppercase backdrop-blur-sm transition-all'
+        >
+          <ArrowLeft className='size-4 transition-transform group-hover:-translate-x-0.5' />
+          Gallery
+        </Link>
 
-      {photo && (
-        <div className='absolute top-5 right-5 z-10 flex items-stretch gap-2'>
-          <DownloadButton photo={photo} />
-          {hydrated && isMine && <DeleteButton photo={photo} />}
-        </div>
-      )}
-
-      {photo && (
-        <div className='pointer-events-none absolute inset-x-0 bottom-7 z-10 text-center'>
-          <div className='mx-auto flex items-center justify-center gap-3'>
-            <span className='bg-bronze/70 h-px w-8' />
-            <span className='font-display text-gold text-sm tracking-[0.3em] uppercase'>
-              {photo.name}
-            </span>
-            <span className='bg-bronze/70 h-px w-8' />
+        {photo && (
+          <div className='pointer-events-auto absolute top-5 right-5 flex items-stretch gap-2'>
+            <DownloadButton photo={photo} />
+            {hydrated && isMine && <DeleteButton photo={photo} />}
           </div>
-        </div>
-      )}
+        )}
+
+        {photo && (
+          <div className='absolute inset-x-0 bottom-7 text-center'>
+            <div className='mx-auto flex items-center justify-center gap-3'>
+              <span className='bg-bronze/70 h-px w-8' />
+              <span className='font-display text-gold text-sm tracking-[0.3em] uppercase'>
+                {photo.name}
+              </span>
+              <span className='bg-bronze/70 h-px w-8' />
+            </div>
+          </div>
+        )}
+      </div>
     </main>
   )
 }
