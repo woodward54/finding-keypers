@@ -8,7 +8,7 @@ import { useMomentPhotos, type MomentPhoto } from "@/lib/use-moment-photos";
 // slightly different pace for a layered parallax feel. The marquee duration is
 // derived from the column's measured content height, so the on-screen speed
 // stays constant no matter how many photos are loaded.
-const SPEEDS = [32, 24, 28, 22];
+const SPEEDS = [52, 45, 28, 22];
 
 /** 2 columns on mobile, 4 from the `md` breakpoint up. */
 function useColumnCount() {
