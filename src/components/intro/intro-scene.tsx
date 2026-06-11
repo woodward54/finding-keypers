@@ -45,7 +45,7 @@ const BLOCKS: Block[] = [
       '',
       "They're meant to be shared.",
     ],
-    hold: 5000,
+    hold: 4500,
     fadeOut: 3000,
   },
   {
@@ -59,7 +59,7 @@ const BLOCKS: Block[] = [
     ],
     hold: 5000,
   },
-  { lines: ['But first…'], hold: 1500 },
+  { lines: ['But first…'], hold: 1700 },
   {
     lines: [
       'Capture the moment.',
