@@ -1,13 +1,27 @@
 'use client'
 
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import type { MomentPhoto } from '@/lib/use-moment-photos'
 import { useMomentPhotos } from '@/lib/use-moment-photos'
-import { ArrowLeft, DownloadIcon } from 'lucide-react'
+import { useMyMoments, useMyMomentsHydrated } from '@/lib/use-my-moments'
+import { useMutation } from 'convex/react'
+import { ArrowLeft, DownloadIcon, Trash2Icon } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import posthog from 'posthog-js'
 import { useEffect, useState } from 'react'
+import { api } from '../../../../convex/_generated/api'
+import type { Id } from '../../../../convex/_generated/dataModel'
 
 const PhotoScene = dynamic(
   () => import('@/components/view/photo-scene').then((m) => m.PhotoScene),
@@ -60,11 +74,68 @@ function DownloadButton({ photo }: { photo: MomentPhoto }) {
       onClick={handleDownload}
       disabled={busy}
       aria-label='Download'
-      className='group border-bronze/40 text-gold hover:border-gold absolute top-5 right-5 z-10 flex items-center gap-2 rounded-md border bg-black/40 px-3 py-2 text-xs tracking-[0.2em] uppercase backdrop-blur-sm transition-all disabled:pointer-events-none disabled:opacity-50'
+      className='group border-bronze/40 text-gold hover:border-gold flex items-center gap-2 rounded-md border bg-black/40 px-3 py-2 text-xs tracking-[0.2em] uppercase backdrop-blur-sm transition-all disabled:pointer-events-none disabled:opacity-50'
     >
       <DownloadIcon className='size-4 transition-transform group-hover:scale-110' />
       {busy ? 'Saving…' : 'Download'}
     </button>
+  )
+}
+
+function DeleteButton({ photo }: { photo: MomentPhoto }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const removeFromMyMoments = useMyMoments((s) => s.remove)
+  const deletePhoto = useMutation(api.photos.deletePhoto)
+
+  const handleDelete = async () => {
+    if (busy) return
+    setBusy(true)
+    posthog.capture('photo_deleted', { photo_id: photo.id, photo_name: photo.name })
+    try {
+      await deletePhoto({ id: photo.id as Id<'photos'> })
+      removeFromMyMoments(photo.id)
+      setOpen(false)
+      router.push('/')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <button
+        type='button'
+        onClick={() => setOpen(true)}
+        aria-label='Delete'
+        className='group border-bronze/40 text-gold hover:border-destructive hover:text-destructive flex items-center rounded-md border bg-black/40 px-3 py-2 backdrop-blur-sm transition-all'
+      >
+        <Trash2Icon className='size-4 transition-transform group-hover:scale-110' />
+      </button>
+
+      <DialogContent className='border-bronze/40 bg-card'>
+        <DialogHeader>
+          <DialogTitle className='font-display text-gold tracking-[0.2em] uppercase'>
+            Delete this keyper?
+          </DialogTitle>
+          <DialogDescription>
+            “{photo.name}” will be gone for good — the portrait and its image are permanently
+            removed.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant='outline' disabled={busy}>
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button variant='destructive' onClick={handleDelete} disabled={busy}>
+            {busy ? 'Deleting…' : 'Delete'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -73,6 +144,8 @@ export default function ViewPage() {
   const id = decodeURIComponent(params.id)
   const { photos, isLoading } = useMomentPhotos()
   const photo = photos.find((p) => p.id === id)
+  const hydrated = useMyMomentsHydrated()
+  const isMine = useMyMoments((s) => s.ids.includes(id))
 
   useEffect(() => {
     if (!photo) return
@@ -101,7 +174,12 @@ export default function ViewPage() {
         Gallery
       </Link>
 
-      {photo && <DownloadButton photo={photo} />}
+      {photo && (
+        <div className='absolute top-5 right-5 z-10 flex items-stretch gap-2'>
+          <DownloadButton photo={photo} />
+          {hydrated && isMine && <DeleteButton photo={photo} />}
+        </div>
+      )}
 
       {photo && (
         <div className='pointer-events-none absolute inset-x-0 bottom-7 z-10 text-center'>
